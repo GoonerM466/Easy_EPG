@@ -44,18 +44,18 @@ st.markdown("""
         overflow: hidden;
     }
     
-    /* Left Pane: Independent Directory Scroll */
+    /* Left Pane: Wide Independent Directory Scroll */
     [data-testid="stHorizontalBlock"] > div:nth-child(1) {
         max-height: 75vh;
         overflow-y: auto !important;
-        padding-right: 10px;
+        padding-right: 15px;
     }
     
-    /* Right Pane: Independent Program Details Scroll */
+    /* Right Pane: Narrower Independent Program Details Scroll */
     [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         max-height: 75vh;
         overflow-y: auto !important;
-        padding-left: 15px;
+        padding-left: 20px;
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
@@ -130,12 +130,14 @@ def parse_xmltv_datetime(dt_str, tz_info):
 def get_genre_class_and_text(category_text):
     if not category_text:
         return "genre-default", ""
+    
     cat_lower = category_text.lower()
     if "sport" in cat_lower or "sports" in cat_lower:
-        return "genre-sport", f" | 🏷️ {category_text}"
+        return "genre-sport", f" | ({category_text})"
     if "movie" in cat_lower or "film" in cat_lower:
-        return "genre-movie", f" | 🎬 {category_text}"
-    return "genre-default", f" | 📂 {category_text}"
+        return "genre-movie", f" | ({category_text})"
+        
+    return "genre-default", f" | ({category_text})"
 
 def process_epg_stream(file_obj, max_future_hours, tz_info):
     now_local = datetime.now(timezone.utc).astimezone(tz_info)
@@ -221,7 +223,6 @@ if uploaded_file is not None:
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
-    # Global filter application
     filtered_channels = []
     for cid, cinfo in channel_map.items():
         if selected_group != "All Groups" and cinfo['group'] != selected_group:
@@ -249,8 +250,8 @@ if uploaded_file is not None:
             page_channels = filtered_channels[start_idx:end_idx]
             st.caption(f"Showing results {start_idx + 1}–{end_idx} out of {total_channels} filtered channels")
 
-        # --- High Usability Independent Split-Scrolling Windows ---
-        left_pane, right_pane = st.columns([1, 2], gap="medium")
+        # --- Adjusted Grid Split: Left pane is now much wider than the right pane ---
+        left_pane, right_pane = st.columns([2, 1.2], gap="medium")
         
         header_to_cid_map = {}
         header_options_list = []
@@ -270,7 +271,7 @@ if uploaded_file is not None:
             header_to_cid_map[header_string] = cid
             header_options_list.append(header_string)
 
-        # Left Frame Area (Maintains internal scrollbar separate from main page container)
+        # Left Pane Area: Takes precedence on screens with text expansions
         with left_pane:
             st.markdown("### 🗺️ Channel Directory")
             selected_header = st.radio(
@@ -279,7 +280,7 @@ if uploaded_file is not None:
                 label_visibility="collapsed"
             )
         
-        # Right Frame Area (Stays static at viewport top, updating content dynamically next to choice)
+        # Right Pane Area: Secondary detailing area
         with right_pane:
             if selected_header:
                 active_cid = header_to_cid_map[selected_header]
