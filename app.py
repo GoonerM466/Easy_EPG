@@ -7,7 +7,6 @@ st.set_page_config(page_title="Easy EPG", layout="wide")
 
 # --- Security Gateway ---
 def check_password():
-    """Returns True if the user entered the correct password."""
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
 
@@ -15,24 +14,20 @@ def check_password():
         return True
 
     st.subheader("🔒 Access Restricted")
-    
     with st.form(key="login_form", clear_on_submit=False):
         user_input = st.text_input("Enter Passphrase Key", type="password")
         submit_button = st.form_submit_button(label="Verify Key & Access")
-        
         if submit_button:
             if user_input == st.secrets["access_password"]:
                 st.session_state.password_correct = True
                 st.rerun()
             else:
                 st.error("Invalid Passphrase Token.")
-                
     return False
 
 if not check_password():
     st.stop()
 
-# --- Post-Authentication Pipeline ---
 st.title("📺 Easy EPG")
 
 # --- Custom UI Pane Constraints & Global Theme Tints ---
@@ -226,7 +221,6 @@ if uploaded_file is not None:
                 
                 is_active = (cid == st.session_state.active_channel_id)
                 
-                # Native structural card element wrapper
                 with st.container(border=True):
                     card_logo_col, card_text_col = st.columns([1, 3])
                     
@@ -249,7 +243,6 @@ if uploaded_file is not None:
                     else:
                         st.caption("ℹ️ No scheduling metadata captured for this window.")
                     
-                    # Full-Width Interactive Control Target (100% reliable tap footprint on mobile)
                     btn_label = "🟢 Currently Viewing Channel" if is_active else "⚡ Tap to View Detailed Guide"
                     if st.button(btn_label, key=f"select_ch_{cid}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.active_channel_id = cid
@@ -265,9 +258,19 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                st.markdown(f"## 📋 {cinfo['name']}")
-                if cinfo['group']: 
-                    st.caption(f"Category Group: **{cinfo['group']}**")
+                # --- Fixed Native Header Block with Dynamic Logo Rendering ---
+                with st.container():
+                    header_logo_col, header_text_col = st.columns([1, 4])
+                    with header_logo_col:
+                        if cinfo.get("logo"):
+                            st.image(cinfo["logo"], use_container_width=True)
+                        else:
+                            st.markdown("## 📺")
+                    with header_text_col:
+                        st.markdown(f"## {cinfo['name']}")
+                        if cinfo['group']: 
+                            st.caption(f"Category Group: **{cinfo['group']}**")
+                            
                 st.markdown("---")
                 
                 current_prog = next((p for p in active_schedule if p['is_current']), None)
