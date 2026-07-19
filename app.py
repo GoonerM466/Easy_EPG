@@ -1,7 +1,7 @@
 import gzip
 import xml.etree.ElementTree as ET
 import streamlit as st
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="EPG Viewer", layout="wide")
 
@@ -15,13 +15,18 @@ def check_password():
         return True
 
     st.subheader("🔒 Access Restricted")
-    user_input = st.text_input("Enter Passphrase Key", type="password")
     
-    if user_input == st.secrets["access_password"]:
-        st.session_state.password_correct = True
-        st.rerun()
-    elif user_input:
-        st.error("Invalid Passphrase Token.")
+    with st.form(key="login_form", clear_on_submit=False):
+        user_input = st.text_input("Enter Passphrase Key", type="password")
+        submit_button = st.form_submit_button(label="Verify Key & Access")
+        
+        if submit_button:
+            if user_input == st.secrets["access_password"]:
+                st.session_state.password_correct = True
+                st.rerun()
+            else:
+                st.error("Invalid Passphrase Token.")
+                
     return False
 
 if not check_password():
@@ -30,7 +35,23 @@ if not check_password():
 # --- Post-Authentication Pipeline ---
 st.title("📺 Private EPG Viewer")
 
-# Target horizon selection for window filtering
+# --- Sidebar Configuration Layout ---
+st.sidebar.header("Configuration")
+
+# Dynamic manual timezone assignment mapping
+tz_options = {
+    "UTC / GMT": 0,
+    "EST / EDT (UTC-5 / UTC-4)": -4,  # Adjusting for local Daylight Time defaults if needed
+    "CST / CDT (UTC-6 / UTC-5)": -5,
+    "MST / MDT (UTC-7 / UTC-6)": -6,
+    "PST / PDT (UTC-8 / UTC-7)": -7,
+    "UK / BST (UTC+0 / UTC+1)": 1,
+    "CET / CEST (UTC+1 / UTC+2)": 2
+}
+selected_tz_offset = st.sidebar.selectbox("Local Timezone Offset", options=list(tz_options.keys()), index=1)
+tz_hours = tz_options[selected_tz_offset]
+target_tz = timezone(timedelta(hours=tz_hours))
+
 lookahead_hours = st.sidebar.selectbox(
     "Future Programming Window",
     options=[0, 2, 4, 6, 8],
@@ -39,34 +60,22 @@ lookahead_hours = st.sidebar.selectbox(
 
 uploaded_file = st.file_uploader("Load Local EPG File", type=["xml", "gz"])
 
-def parse_xmltv_datetime(dt_str):
-    """Parses standard XMLTV date string (e.g., '20260719143000 +0000') and converts to local timezone."""
+def parse_xmltv_datetime(dt_str, tz_info):
+    """Parses standard XMLTV date string, enforces UTC normalization, shifts to target timezone."""
     try:
-        # Expected baseline format format: YYYYMMDDhhmmss +/-HHMM
         parts = dt_str.split()
         base_dt = datetime.strptime(parts[0][:14], "%Y%m%d%H%M%S")
-        
-        # Enforce source UTC definition if marked or assumed
+        # Base XML data is explicitly forced to UTC
         base_dt = base_dt.replace(tzinfo=timezone.utc)
-        
-        # Adjust via offset if present in string and not natively UTC zeroed
-        if len(parts) > 1 and parts[1] != "+0000":
-            # Explicit handling for custom offsets if data drifts from pure UTC
-            sign = 1 if parts[1][0] == '+' else -1
-            hours = int(parts[1][1:3])
-            minutes = int(parts[1][3:5])
-            base_dt = base_dt.replace(tzinfo=timezone.utc) # Fallback baseline normalization
-            
-        # Convert to environment local timezone automatically
-        return base_dt.astimezone()
+        # Shift execution timeline to chosen targeted timezone
+        return base_dt.astimezone(tz_info)
     except (ValueError, IndexError):
         return None
 
-def process_epg_stream(file_obj, max_future_hours):
-    """Iteratively parses EPG datasets to bound memory consumption and applies temporal filters."""
-    now_local = datetime.now().astimezone()
+def process_epg_stream(file_obj, max_future_hours, tz_info):
+    """Iteratively parses EPG datasets matching specific localized timeline horizons."""
+    now_local = datetime.now(timezone.utc).astimezone(tz_info)
     
-    # Open context stream based on signature compression
     if file_obj.name.endswith('.gz'):
         context_stream = gzip.open(file_obj, 'rb')
     else:
@@ -76,7 +85,6 @@ def process_epg_stream(file_obj, max_future_hours):
     groups = set()
     programmes = {}
 
-    # Initialize event iterator to process elements on end tags
     context = ET.iterparse(context_stream, events=('end',))
     
     for event, elem in context:
@@ -91,25 +99,21 @@ def process_epg_stream(file_obj, max_future_hours):
             groups.add(group_name)
             programmes[ch_id] = []
             
-            elem.clear() # Prune element subtree from memory
+            elem.clear()
             
         elif elem.tag == 'programme':
             ch_id = elem.get('channel')
             start_raw = elem.get('start', '')
             stop_raw = elem.get('stop', '')
             
-            start_dt = parse_xmltv_datetime(start_raw)
-            stop_dt = parse_xmltv_datetime(stop_raw)
+            start_dt = parse_xmltv_datetime(start_raw, tz_info)
+            stop_dt = parse_xmltv_datetime(stop_raw, tz_info)
             
             if start_dt and stop_dt:
-                # FILTER CONDITIONS: 
-                # 1. Exclude if program already ended before current time
-                # 2. Exclude if program starts beyond selected horizon window
                 is_current = (start_dt <= now_local < stop_dt)
                 
                 if is_current or (now_local <= start_dt):
                     if max_future_hours == 0 and not is_current:
-                        # Drop if user restricted strictly to active programs
                         elem.clear()
                         continue
                         
@@ -130,57 +134,78 @@ def process_epg_stream(file_obj, max_future_hours):
                         "is_current": is_current
                     })
                     
-            elem.clear() # Clear reference to maintain low RAM footprint
+            elem.clear()
 
-    # Clean up file handles safely if zipped container
     if file_obj.name.endswith('.gz'):
         context_stream.close()
 
-    # Sort schedules per channel sequentially by start times
     for cid in programmes:
         programmes[cid] = sorted(programmes[cid], key=lambda x: x['start'])
 
     return sorted(list(groups)), channels, programmes
 
 if uploaded_file is not None:
-    available_groups, channel_map, epg_data = process_epg_stream(uploaded_file, lookahead_hours)
-    selected_group = st.sidebar.selectbox("Category Group", options=available_groups)
+    # Trigger processing execution pipe using the selected local timezone map
+    available_groups, channel_map, epg_data = process_epg_stream(uploaded_file, lookahead_hours, target_tz)
     
-    filtered_channels = [cid for cid, cinfo in channel_map.items() if cinfo['group'] == selected_group]
+    # --- Filter Layout Elements ---
+    search_query = st.text_input("🔍 Search Channel Name or Program Title (Live Results)", "").strip().lower()
     
-    now_runtime = datetime.now().astimezone()
+    selected_group = st.sidebar.selectbox("Category Group Focus", options=["All Groups"] + available_groups)
     
-    for cid in filtered_channels:
+    now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
+    
+    # Filter channel sets dynamically matching text terms and group settings
+    filtered_channels = []
+    for cid, cinfo in channel_map.items():
+        # Match against Group restriction criteria
+        if selected_group != "All Groups" and cinfo['group'] != selected_group:
+            continue
+            
+        ch_name_match = search_query in cinfo['name'].lower()
+        
+        # Scan internal program elements for query string intersection match 
         schedule = epg_data.get(cid, [])
+        prog_match = any(search_query in p['title'].lower() for p in schedule)
         
-        # Isolate target indices for separation
-        current_prog = next((p for p in schedule if p['is_current']), None)
-        future_progs = [p for p in schedule if not p['is_current'] and p['start'] > now_runtime]
-        
-        # Build layout label dynamically
-        if current_prog:
-            remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
-            time_str = current_prog['start'].strftime('%H:%M')
-            header_string = f"🔹 {channel_map[cid]['name']} — NOW: {time_str} | {current_prog['title']} ({remaining_mins}m left)"
-        else:
-            header_string = f"🔹 {channel_map[cid]['name']} — [No Information]"
+        if not search_query or ch_name_match or prog_match:
+            filtered_channels.append(cid)
             
-        with st.expander(header_string):
-            # Display current details at top level inside container
+    # Render pipeline display loop
+    if not filtered_channels:
+        st.warning("No matching channels or program entries found.")
+    else:
+        for cid in filtered_channels:
+            schedule = epg_data.get(cid, [])
+            cinfo = channel_map[cid]
+            
+            current_prog = next((p for p in schedule if p['is_current']), None)
+            future_progs = [p for p in schedule if not p['is_current'] and p['start'] > now_runtime]
+            
+            # Appending explicit Group information metadata inside header parameters
+            group_badge = f"[{cinfo['group']}]"
+            
             if current_prog:
-                st.markdown(f"### 🟢 Currently Broadcasting")
-                st.markdown(f"**⏱️ {current_prog['start'].strftime('%H:%M')}** — **{current_prog['title']}**")
-                if current_prog['desc']:
-                    st.caption(current_prog['desc'])
-                st.markdown("---")
-            
-            # Sub-render upcoming queue block
-            if future_progs:
-                st.markdown("### ⏭️ Coming Up Next")
-                for prog in future_progs:
-                    st.markdown(f"**⏱️ {prog['start'].strftime('%H:%M')}** — **{prog['title']}**")
-                    if prog['desc']:
-                        st.caption(prog['desc'])
+                remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
+                time_str = current_prog['start'].strftime('%H:%M')
+                header_string = f"🔹 {cinfo['name']} {group_badge} — NOW: {time_str} | {current_prog['title']} ({remaining_mins}m left)"
+            else:
+                header_string = f"🔹 {cinfo['name']} {group_badge} — [No Information]"
+                
+            with st.expander(header_string):
+                if current_prog:
+                    st.markdown(f"### 🟢 Currently Broadcasting")
+                    st.markdown(f"**⏱️ {current_prog['start'].strftime('%H:%M')}** — **{current_prog['title']}**")
+                    if current_prog['desc']:
+                        st.caption(current_prog['desc'])
                     st.markdown("---")
-            elif not current_prog and not future_progs:
-                st.info("No localized scheduling data within selected window.")
+                
+                if future_progs:
+                    st.markdown("### ⏭️ Coming Up Next")
+                    for prog in future_progs:
+                        st.markdown(f"**⏱️ {prog['start'].strftime('%H:%M')}** — **{prog['title']}**")
+                        if prog['desc']:
+                            st.caption(prog['desc'])
+                        st.markdown("---")
+                elif not current_prog and not future_progs:
+                    st.info("No localized scheduling data within selected window.")
