@@ -33,15 +33,15 @@ if not check_password():
     st.stop()
 
 # --- Post-Authentication Pipeline ---
-st.title("📺 Private EPG Viewer")
+st.title("Private EPG Viewer")
 
 # --- Sidebar Configuration Layout ---
 st.sidebar.header("Configuration")
 
-# Dynamic manual timezone assignment mapping
+# Dynamic timezone offset assignment mapping
 tz_options = {
     "UTC / GMT": 0,
-    "EST / EDT (UTC-5 / UTC-4)": -4,  # Adjusting for local Daylight Time defaults if needed
+    "EST / EDT (UTC-5 / UTC-4)": -4,
     "CST / CDT (UTC-6 / UTC-5)": -5,
     "MST / MDT (UTC-7 / UTC-6)": -6,
     "PST / PDT (UTC-8 / UTC-7)": -7,
@@ -65,9 +65,7 @@ def parse_xmltv_datetime(dt_str, tz_info):
     try:
         parts = dt_str.split()
         base_dt = datetime.strptime(parts[0][:14], "%Y%m%d%H%M%S")
-        # Base XML data is explicitly forced to UTC
         base_dt = base_dt.replace(tzinfo=timezone.utc)
-        # Shift execution timeline to chosen targeted timezone
         return base_dt.astimezone(tz_info)
     except (ValueError, IndexError):
         return None
@@ -93,10 +91,12 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
             display_name = elem.find('display-name').text if elem.find('display-name') is not None else ch_id
             
             group_tag = elem.find('group')
-            group_name = group_tag.text if group_tag is not None else "Uncategorized"
+            # If group doesn't exist, preserve as None to avoid rendering "Uncategorized"
+            group_name = group_tag.text if group_tag is not None else None
             
             channels[ch_id] = {"name": display_name, "group": group_name}
-            groups.add(group_name)
+            if group_name:
+                groups.add(group_name)
             programmes[ch_id] = []
             
             elem.clear()
@@ -145,33 +145,26 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
     return sorted(list(groups)), channels, programmes
 
 if uploaded_file is not None:
-    # Trigger processing execution pipe using the selected local timezone map
     available_groups, channel_map, epg_data = process_epg_stream(uploaded_file, lookahead_hours, target_tz)
     
-    # --- Filter Layout Elements ---
+    # --- Live Filtering Interface ---
     search_query = st.text_input("🔍 Search Channel Name or Program Title (Live Results)", "").strip().lower()
-    
     selected_group = st.sidebar.selectbox("Category Group Focus", options=["All Groups"] + available_groups)
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
-    # Filter channel sets dynamically matching text terms and group settings
     filtered_channels = []
     for cid, cinfo in channel_map.items():
-        # Match against Group restriction criteria
         if selected_group != "All Groups" and cinfo['group'] != selected_group:
             continue
             
         ch_name_match = search_query in cinfo['name'].lower()
-        
-        # Scan internal program elements for query string intersection match 
         schedule = epg_data.get(cid, [])
         prog_match = any(search_query in p['title'].lower() for p in schedule)
         
         if not search_query or ch_name_match or prog_match:
             filtered_channels.append(cid)
             
-    # Render pipeline display loop
     if not filtered_channels:
         st.warning("No matching channels or program entries found.")
     else:
@@ -182,15 +175,18 @@ if uploaded_file is not None:
             current_prog = next((p for p in schedule if p['is_current']), None)
             future_progs = [p for p in schedule if not p['is_current'] and p['start'] > now_runtime]
             
-            # Appending explicit Group information metadata inside header parameters
-            group_badge = f"[{cinfo['group']}]"
+            # Format Group Indicator only if it natively exists
+            group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
             
             if current_prog:
                 remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
                 time_str = current_prog['start'].strftime('%H:%M')
-                header_string = f"🔹 {cinfo['name']} {group_badge} — NOW: {time_str} | {current_prog['title']} ({remaining_mins}m left)"
+                
+                # Append description context into the expandable summary string if present
+                desc_inline = f" — {current_prog['desc']}" if current_prog['desc'] else ""
+                header_string = f"🔹 {cinfo['name']}{group_badge} — NOW: {time_str} | {current_prog['title']} ({remaining_mins}m left){desc_inline}"
             else:
-                header_string = f"🔹 {cinfo['name']} {group_badge} — [No Information]"
+                header_string = f"🔹 {cinfo['name']}{group_badge} — [No Information]"
                 
             with st.expander(header_string):
                 if current_prog:
