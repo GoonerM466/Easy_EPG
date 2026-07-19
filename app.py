@@ -59,15 +59,6 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
-    /* Target styling for native Streamlit blocks container row */
-    .ch-card-wrapper {
-        border: 1px solid rgba(49, 51, 63, 0.15);
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 8px;
-        background-color: transparent;
-    }
-    
     /* Inline shading wrapper for channel directory rows */
     .ch-live-prog-box {
         margin-top: 4px;
@@ -180,11 +171,12 @@ def parse_xmltv_datetime(dt_str, tz_info):
         return None
 
 def get_genre_info(category_text):
-    """Returns classification style target classes and raw formatted text wrappers."""
+    """Evaluates multi-genre strings and returns formatting classes and tags."""
     if not category_text:
         return "genre-default", ""
     
     cat_lower = category_text.lower()
+    # Scans the entire delimited string for matching keyword overrides
     if "sport" in cat_lower or "sports" in cat_lower:
         return "genre-sport", f" | ({category_text})"
     if "movie" in cat_lower or "film" in cat_lower:
@@ -213,8 +205,8 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
             group_tag = elem.find('group')
             group_name = group_tag.text if group_tag is not None else None
             
-            logo_tag = elem.find('logo')
-            logo_url = logo_tag.get('href') if logo_tag is not None else None
+            icon_tag = elem.find('icon')
+            logo_url = icon_tag.get('src') if icon_tag is not None else None
             
             channels[ch_id] = {"name": display_name, "group": group_name, "logo": logo_url}
             if group_name:
@@ -232,33 +224,25 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
             
             if start_dt and stop_dt:
                 is_current = (start_dt <= now_local < stop_dt)
+                is_upcoming = (now_local <= start_dt)
                 
-                # Dynamic Schedule Boundary: Always retain the active live view.
-                # Upcoming entries match if their START time falls within the selected +X window.
-                if is_current:
-                    programmes.setdefault(ch_id, []).append({
-                        "start": start_dt,
-                        "stop": stop_dt,
-                        "title": title,
-                        "desc": desc,
-                        "genre": category_text,
-                        "is_current": True
-                    })
-                elif (now_local <= start_dt):
-                    if max_future_hours > 0:
-                        time_delta_hours = (start_dt - now_local).total_seconds() / 3600.0
-                        if time_delta_hours > max_future_hours:
+                if is_current or is_upcoming:
+                    if is_upcoming:
+                        if max_future_hours > 0:
+                            time_delta_hours = (start_dt - now_local).total_seconds() / 3600.0
+                            if time_delta_hours > max_future_hours:
+                                elem.clear()
+                                continue
+                        else:
                             elem.clear()
                             continue
-                    else:
-                        # Window configuration is 0 (Current program only)
-                        elem.clear()
-                        continue
-                        
+                    
                     title = elem.find('title').text if elem.find('title') is not None else "No Title"
                     desc = elem.find('desc').text if elem.find('desc') is not None else ""
-                    category_elem = elem.find('category')
-                    category_text = category_elem.text if category_elem is not None else None
+                    
+                    # Extract all category elements and join them via an explicit / delimiter
+                    categories = [cat.text for cat in elem.findall('category') if cat.text]
+                    category_text = " / ".join(categories) if categories else None
                     
                     programmes.setdefault(ch_id, []).append({
                         "start": start_dt,
@@ -266,7 +250,7 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
                         "title": title,
                         "desc": desc,
                         "genre": category_text,
-                        "is_current": False
+                        "is_current": is_current
                     })
             elem.clear()
 
@@ -336,7 +320,6 @@ if uploaded_file is not None:
                 current_prog = next((p for p in schedule if p['is_current']), None)
                 group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
                 
-                # Execute full structural configuration inside clean columns
                 row_col1, row_col2 = st.columns([1, 5])
                 
                 with row_col1:
@@ -346,14 +329,12 @@ if uploaded_file is not None:
                         st.markdown("<div style='height:52px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
                 
                 with row_col2:
-                    # Clean plain-text label string for native execution safety
                     button_txt = f"{cinfo['name']}{group_badge}"
                     
                     if st.button(button_txt, key=f"ch_row_trigger_{cid}"):
                         st.session_state.active_channel_id = cid
                         st.rerun()
                     
-                    # Information shading panels positioned immediately below selection line
                     if current_prog:
                         remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
                         bg_class, genre_text = get_genre_info(current_prog['genre'])
