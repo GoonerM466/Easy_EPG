@@ -59,24 +59,47 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
+    /* Cohesive block encapsulation wrapper for rows */
+    .ch-row-card {
+        display: flow-root !important;
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        box-sizing: border-box;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    
+    /* Focus and Activation Card Highlights */
+    .card-active {
+        border: 2px solid currentColor !important;
+        background-color: rgba(128, 128, 128, 0.08) !important;
+    }
+    .card-normal {
+        border: 2px solid rgba(128, 128, 128, 0.05) !important;
+        background-color: transparent;
+    }
+
     /* Inline shading wrapper for channel directory rows */
     .ch-live-prog-box {
-        margin-top: 6px;
+        margin-top: 8px;
         padding: 10px 14px;
-        border-radius: 4px;
+        border-radius: 6px;
         border-left: 4px solid rgba(0,0,0,0.15);
         font-size: 1.02rem;
         line-height: 1.45;
         display: block;
         word-wrap: break-word;
-        min-height: 52px; /* Prevent vertical text truncation */
+        min-height: 56px;
     }
     
     /* Font sizing adjustment inside detailed program sections */
     .prog-header-title {
-        font-size: 1.4rem !important;
+        font-size: 1.45rem !important;
         font-weight: 700;
         margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     .genre-card {
         padding: 12px 14px;
@@ -90,20 +113,6 @@ st.markdown("""
     }
     .genre-card small, .genre-card div {
         font-size: 0.95rem !important;
-    }
-
-    /* Active Highlight States (Leverages system color scheme tokens) */
-    .active-channel-container {
-        border: 2px solid currentColor !important;
-        opacity: 0.95;
-        border-radius: 8px;
-        padding: 4px;
-        background-color: rgba(128, 128, 128, 0.08);
-    }
-    
-    .normal-channel-container {
-        border: 2px solid transparent;
-        padding: 4px;
     }
 
     /* Cohesive Genre Shading Variants (Universal Mapping) */
@@ -130,18 +139,18 @@ st.markdown("""
     div.stButton > button {
         width: 100% !important;
         text-align: left !important;
-        padding: 14px 18px !important;
-        min-height: 56px !important;
-        border-radius: 8px !important;
-        border: 1px solid rgba(49, 51, 63, 0.18) !important;
-        background-color: transparent !important;
+        padding: 10px 14px !important;
+        min-height: 48px !important;
+        border-radius: 6px !important;
+        border: 1px solid rgba(49, 51, 63, 0.15) !important;
+        background-color: rgba(128, 128, 128, 0.03) !important;
         transition: all 0.2s ease;
         white-space: normal !important;
         word-break: break-word !important;
     }
     div.stButton > button:hover {
-        background-color: rgba(49, 51, 63, 0.04) !important;
-        border-color: rgba(49, 51, 63, 0.35) !important;
+        background-color: rgba(49, 51, 63, 0.06) !important;
+        border-color: rgba(49, 51, 63, 0.3) !important;
     }
     div.stButton > button p {
         font-size: 1.15rem !important;
@@ -339,21 +348,20 @@ if uploaded_file is not None:
                 current_prog = next((p for p in schedule if p['is_current']), None)
                 group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
                 
-                # Dynamic visual activation context framing
                 is_active = (cid == st.session_state.active_channel_id)
-                container_class = "active-channel-container" if is_active else "normal-channel-container"
+                card_state_class = "card-active" if is_active else "card-normal"
                 
-                # HTML Container Wrapper Opening
-                st.markdown(f'<div class="{container_class}">', unsafe_allow_html=True)
+                # Encapsulate the row contents in a unified flow-root block to clean up borders and tap zones
+                st.markdown(f'<div class="ch-row-card {card_state_class}">', unsafe_allow_html=True)
                 
-                row_col1, row_col2 = st.columns([1.2, 5])
+                row_col1, row_col2 = st.columns([1.4, 5])
                 
                 with row_col1:
-                    # Scaled layout width constraint match to parallel data matrix boxes
+                    # Upscaled dimension logic for proportionate sizing
                     if cinfo.get("logo"):
-                        st.image(cinfo["logo"], width=78)
+                        st.image(cinfo["logo"], width=84)
                     else:
-                        st.markdown("<div style='height:78px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='height:84px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
                 
                 with row_col2:
                     button_txt = f"{cinfo['name']}{group_badge}"
@@ -374,9 +382,8 @@ if uploaded_file is not None:
                     else:
                         st.markdown('<div class="ch-live-prog-box genre-default">[No Information]</div>', unsafe_allow_html=True)
                 
-                # HTML Container Wrapper Closing & Structural Spacing Padding
                 st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
         
         # Right Pane Area: Schedule Details View
         with right_pane:
@@ -390,11 +397,15 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:10px; border-radius:4px;"/>' if cinfo.get("logo") else ''
+                # Conditional listing layout execution following user matching parameters
+                if cinfo.get("logo"):
+                    logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:8px; border-radius:4px;"/> | {cinfo["name"]}'
+                else:
+                    logo_header_html = f'📺 {cinfo["name"]}'
                 
                 st.markdown(f"""
                 <div class="prog-header-title">
-                    {logo_header_html}📺 {cinfo['name']}
+                    {logo_header_html}
                 </div>
                 """, unsafe_allow_html=True)
                 
