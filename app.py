@@ -33,30 +33,32 @@ if not check_password():
     st.stop()
 
 # --- Post-Authentication Pipeline ---
-st.title("Private EPG Viewer")
+st.title("📺 Easy EPG")
 
-# --- Sidebar Configuration Layout ---
-st.sidebar.header("Configuration")
+# --- Main Page Configuration Controls (Highly Visible on Mobile) ---
+config_col1, config_col2 = st.columns(2)
 
-# Dynamic timezone offset assignment mapping
-tz_options = {
-    "UTC / GMT": 0,
-    "EST / EDT (UTC-5 / UTC-4)": -4,
-    "CST / CDT (UTC-6 / UTC-5)": -5,
-    "MST / MDT (UTC-7 / UTC-6)": -6,
-    "PST / PDT (UTC-8 / UTC-7)": -7,
-    "UK / BST (UTC+0 / UTC+1)": 1,
-    "CET / CEST (UTC+1 / UTC+2)": 2
-}
-selected_tz_offset = st.sidebar.selectbox("Local Timezone Offset", options=list(tz_options.keys()), index=1)
-tz_hours = tz_options[selected_tz_offset]
-target_tz = timezone(timedelta(hours=tz_hours))
+with config_col1:
+    tz_options = {
+        "UTC / GMT": 0,
+        "EST / EDT (UTC-5 / UTC-4)": -4,
+        "CST / CDT (UTC-6 / UTC-5)": -5,
+        "MST / MDT (UTC-7 / UTC-6)": -6,
+        "PST / PDT (UTC-8 / UTC-7)": -7,
+        "UK / BST (UTC+0 / UTC+1)": 1,
+        "CET / CEST (UTC+1 / UTC+2)": 2
+    }
+    selected_tz_offset = st.selectbox("Local Timezone Offset", options=list(tz_options.keys()), index=1)
+    tz_hours = tz_options[selected_tz_offset]
+    target_tz = timezone(timedelta(hours=tz_hours))
 
-lookahead_hours = st.sidebar.selectbox(
-    "Future Programming Window",
-    options=[0, 2, 4, 6, 8],
-    format_func=lambda x: "Always Current Program Only" if x == 0 else f"Current + {x} Hours"
-)
+with config_col2:
+    lookahead_hours = st.selectbox(
+        "Future Programming Window",
+        options=[0, 2, 4, 6, 8],
+        index=1,  # Defaults directly to +2 Hours so future data renders immediately
+        format_func=lambda x: "Always Current Program Only" if x == 0 else f"Current + {x} Hours"
+    )
 
 uploaded_file = st.file_uploader("Load Local EPG File", type=["xml", "gz"])
 
@@ -91,7 +93,6 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
             display_name = elem.find('display-name').text if elem.find('display-name') is not None else ch_id
             
             group_tag = elem.find('group')
-            # If group doesn't exist, preserve as None to avoid rendering "Uncategorized"
             group_name = group_tag.text if group_tag is not None else None
             
             channels[ch_id] = {"name": display_name, "group": group_name}
@@ -148,8 +149,11 @@ if uploaded_file is not None:
     available_groups, channel_map, epg_data = process_epg_stream(uploaded_file, lookahead_hours, target_tz)
     
     # --- Live Filtering Interface ---
-    search_query = st.text_input("🔍 Search Channel Name or Program Title (Live Results)", "").strip().lower()
-    selected_group = st.sidebar.selectbox("Category Group Focus", options=["All Groups"] + available_groups)
+    filter_col1, filter_col2 = st.columns([2, 1])
+    with filter_col1:
+        search_query = st.text_input("🔍 Search Channel Name or Program Title (Live Results)", "").strip().lower()
+    with filter_col2:
+        selected_group = st.selectbox("Category Group Filter", options=["All Groups"] + available_groups)
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
@@ -175,14 +179,13 @@ if uploaded_file is not None:
             current_prog = next((p for p in schedule if p['is_current']), None)
             future_progs = [p for p in schedule if not p['is_current'] and p['start'] > now_runtime]
             
-            # Format Group Indicator only if it natively exists
+            # Group handling: explicitly omitted if None or empty
             group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
             
             if current_prog:
                 remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
                 time_str = current_prog['start'].strftime('%H:%M')
                 
-                # Append description context into the expandable summary string if present
                 desc_inline = f" — {current_prog['desc']}" if current_prog['desc'] else ""
                 header_string = f"🔹 {cinfo['name']}{group_badge} — NOW: {time_str} | {current_prog['title']} ({remaining_mins}m left){desc_inline}"
             else:
@@ -190,14 +193,14 @@ if uploaded_file is not None:
                 
             with st.expander(header_string):
                 if current_prog:
-                    st.markdown(f"### 🟢 Currently Broadcasting")
+                    st.markdown(f"### 🟢 Now Playing")
                     st.markdown(f"**⏱️ {current_prog['start'].strftime('%H:%M')}** — **{current_prog['title']}**")
                     if current_prog['desc']:
                         st.caption(current_prog['desc'])
                     st.markdown("---")
                 
                 if future_progs:
-                    st.markdown("### ⏭️ Coming Up Next")
+                    st.markdown("### ⏭️ Upcoming")
                     for prog in future_progs:
                         st.markdown(f"**⏱️ {prog['start'].strftime('%H:%M')}** — **{prog['title']}**")
                         if prog['desc']:
