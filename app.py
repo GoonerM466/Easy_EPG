@@ -63,7 +63,7 @@ st.markdown("""
         .genre-default { background-color: #262730 !important; color: #fafafa !important; }
     }
 </style>
-""", unsafe_allowed_html=True)
+""", unsafe_allow_html=True)
 
 # --- Configuration Controls ---
 config_col1, config_col2, config_col3 = st.columns(3)
