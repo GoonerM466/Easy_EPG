@@ -59,42 +59,23 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
-    /* Row layout styling for channel entries */
-    .ch-row-container {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        text-align: left;
-    }
-    .ch-logo-frame {
-        width: 48px;
-        height: 48px;
-        object-fit: contain;
-        margin-right: 14px;
-        border-radius: 4px;
+    /* Target styling for native Streamlit blocks container row */
+    .ch-card-wrapper {
+        border: 1px solid rgba(49, 51, 63, 0.15);
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 8px;
         background-color: transparent;
-        flex-shrink: 0;
-    }
-    .ch-text-block {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.35;
-        width: 100%;
-    }
-    .ch-title-lbl {
-        font-size: 1.15rem !important;
-        font-weight: 700;
     }
     
     /* Inline shading wrapper for channel directory rows */
     .ch-live-prog-box {
         margin-top: 4px;
-        padding: 4px 8px;
+        padding: 6px 10px;
         border-radius: 4px;
         border-left: 3px solid rgba(0,0,0,0.1);
         font-size: 1.02rem;
         display: block;
-        width: 100%;
     }
     
     /* Font sizing adjustment inside detailed program sections */
@@ -137,23 +118,11 @@ st.markdown("""
         .genre-default { background-color: #262730 !important; color: #fafafa !important; }
     }
 
-    /* Style override to make Streamlit buttons look like clean, massive clickable rows */
+    /* Make the select buttons inside rows look clean and expand to full width */
     div.stButton > button {
         width: 100% !important;
-        text-align: left !important;
-        padding: 10px 14px !important;
-        border-radius: 8px !important;
-        border: 1px solid rgba(49, 51, 63, 0.15) !important;
-        background-color: transparent !important;
-        transition: background-color 0.2s ease;
-    }
-    div.stButton > button:hover {
-        background-color: rgba(49, 51, 63, 0.05) !important;
-        border-color: rgba(49, 51, 63, 0.3) !important;
-    }
-    div.stButton > button:focus {
-        background-color: rgba(49, 51, 63, 0.08) !important;
-        box-shadow: none !important;
+        padding: 6px 12px !important;
+        font-weight: bold !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -342,38 +311,38 @@ if uploaded_file is not None:
                 current_prog = next((p for p in schedule if p['is_current']), None)
                 group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
                 
-                logo_html = f'<img src="{cinfo["logo"]}" class="ch-logo-frame"/>' if cinfo.get("logo") else '<div class="ch-logo-frame" style="background:rgba(49,51,63,0.1); display:inline-block;"></div>'
-                
-                if current_prog:
-                    remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
-                    bg_class, genre_text = get_genre_info(current_prog['genre'])
+                # Render touch block row layout cleanly using safe native components
+                with st.container():
+                    # Create columns inside the card to keep layout clean for touchscreen targets
+                    row_col1, row_col2 = st.columns([1, 5])
                     
-                    button_label_html = f"""
-                    <div class="ch-row-container">
-                        {logo_html}
-                        <div class="ch-text-block">
-                            <span class="ch-byline-lbl"><span class="ch-title-lbl">{cinfo['name']}</span>{group_badge}</span>
-                            <span class="ch-live-prog-box {bg_class}">
+                    with row_col1:
+                        if cinfo.get("logo"):
+                            st.image(cinfo["logo"], width=50)
+                        else:
+                            st.markdown("<div style='height:50px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
+                    
+                    with row_col2:
+                        st.markdown(f"**<span style='font-size:1.15rem;'>{cinfo['name']}</span>**{group_badge}", unsafe_allow_html=True)
+                        
+                        if current_prog:
+                            remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
+                            bg_class, genre_text = get_genre_info(current_prog['genre'])
+                            
+                            st.markdown(f"""
+                            <div class="ch-live-prog-box {bg_class}">
                                 Now: {current_prog['title']} — {remaining_mins}m left{genre_text}
-                            </span>
-                        </div>
-                    </div>
-                    """
-                else:
-                    button_label_html = f"""
-                    <div class="ch-row-container">
-                        {logo_html}
-                        <div class="ch-text-block">
-                            <span class="ch-title-lbl">{cinfo['name']}</span>{group_badge}<br/>
-                            <span class="ch-live-prog-box genre-default">[No Information]</span>
-                        </div>
-                    </div>
-                    """
-                
-                # Full row click selection
-                if st.button(button_label_html, key=f"row_btn_{cid}", unsafe_allow_html=True):
-                    st.session_state.active_channel_id = cid
-                    st.rerun()
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown('<div class="ch-live-prog-box genre-default">[No Information]</div>', unsafe_allow_html=True)
+                        
+                        # Full-width action button to select the row
+                        if st.button("Select Channel", key=f"select_btn_{cid}"):
+                            st.session_state.active_channel_id = cid
+                            st.rerun()
+                    
+                    st.markdown("<div style='margin-bottom:12px;'></div>", unsafe_allow_html=True)
         
         # Right Pane Area: Fixed Schedule Details View
         with right_pane:
