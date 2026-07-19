@@ -62,13 +62,14 @@ st.markdown("""
     /* Inline shading wrapper for channel directory rows */
     .ch-live-prog-box {
         margin-top: 6px;
-        padding: 8px 12px;
+        padding: 10px 14px;
         border-radius: 4px;
-        border-left: 3px solid rgba(0,0,0,0.1);
+        border-left: 4px solid rgba(0,0,0,0.15);
         font-size: 1.02rem;
-        line-height: 1.4;
+        line-height: 1.45;
         display: block;
         word-wrap: break-word;
+        min-height: 52px; /* Prevent vertical text truncation */
     }
     
     /* Font sizing adjustment inside detailed program sections */
@@ -89,6 +90,20 @@ st.markdown("""
     }
     .genre-card small, .genre-card div {
         font-size: 0.95rem !important;
+    }
+
+    /* Active Highlight States (Leverages system color scheme tokens) */
+    .active-channel-container {
+        border: 2px solid currentColor !important;
+        opacity: 0.95;
+        border-radius: 8px;
+        padding: 4px;
+        background-color: rgba(128, 128, 128, 0.08);
+    }
+    
+    .normal-channel-container {
+        border: 2px solid transparent;
+        padding: 4px;
     }
 
     /* Cohesive Genre Shading Variants (Universal Mapping) */
@@ -116,7 +131,7 @@ st.markdown("""
         width: 100% !important;
         text-align: left !important;
         padding: 14px 18px !important;
-        min-height: 54px !important;
+        min-height: 56px !important;
         border-radius: 8px !important;
         border: 1px solid rgba(49, 51, 63, 0.18) !important;
         background-color: transparent !important;
@@ -245,7 +260,6 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
                     title = elem.find('title').text if elem.find('title') is not None else "No Title"
                     desc = elem.find('desc').text if elem.find('desc') is not None else ""
                     
-                    # Extract all category elements and join them via a forward slash delimiter
                     categories = [cat.text for cat in elem.findall('category') if cat.text]
                     category_text = " / ".join(categories) if categories else None
                     
@@ -325,13 +339,21 @@ if uploaded_file is not None:
                 current_prog = next((p for p in schedule if p['is_current']), None)
                 group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
                 
-                row_col1, row_col2 = st.columns([1, 5])
+                # Dynamic visual activation context framing
+                is_active = (cid == st.session_state.active_channel_id)
+                container_class = "active-channel-container" if is_active else "normal-channel-container"
+                
+                # HTML Container Wrapper Opening
+                st.markdown(f'<div class="{container_class}">', unsafe_allow_html=True)
+                
+                row_col1, row_col2 = st.columns([1.2, 5])
                 
                 with row_col1:
+                    # Scaled layout width constraint match to parallel data matrix boxes
                     if cinfo.get("logo"):
-                        st.image(cinfo["logo"], width=52)
+                        st.image(cinfo["logo"], width=78)
                     else:
-                        st.markdown("<div style='height:52px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='height:78px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
                 
                 with row_col2:
                     button_txt = f"{cinfo['name']}{group_badge}"
@@ -352,7 +374,9 @@ if uploaded_file is not None:
                     else:
                         st.markdown('<div class="ch-live-prog-box genre-default">[No Information]</div>', unsafe_allow_html=True)
                 
-                st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
+                # HTML Container Wrapper Closing & Structural Spacing Padding
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
         # Right Pane Area: Schedule Details View
         with right_pane:
@@ -366,7 +390,7 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                logo_header_html = f'<img src="{cinfo["logo"]}" style="width:40px; height:40px; object-fit:contain; vertical-align:middle; margin-right:10px; border-radius:4px;"/>' if cinfo.get("logo") else ''
+                logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:10px; border-radius:4px;"/>' if cinfo.get("logo") else ''
                 
                 st.markdown(f"""
                 <div class="prog-header-title">
