@@ -59,7 +59,100 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
-    /* Font sizing adjustment inside detailed program sections */
+    /* Absolute Overlay Container for Tap Zones */
+    .clickable-card-wrapper {
+        position: relative;
+        width: 100%;
+        margin-bottom: 16px;
+    }
+
+    /* The visual block rendered via Markdown */
+    .ch-row-card {
+        width: 100%;
+        padding: 16px;
+        border-radius: 10px;
+        box-sizing: border-box;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    
+    /* Selection Borders wrapped cleanly around the entire structure */
+    .card-active {
+        border: 2px solid currentColor !important;
+        background-color: rgba(128, 128, 128, 0.08) !important;
+    }
+    .card-normal {
+        border: 2px solid rgba(128, 128, 128, 0.15) !important;
+        background-color: transparent;
+    }
+
+    /* Force the Streamlit button to fill the card container completely and become invisible */
+    .clickable-card-wrapper div.stButton {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+    }
+    .clickable-card-wrapper div.stButton > button {
+        width: 100% !important;
+        height: 100% !important;
+        background-color: transparent !important;
+        border: none !important;
+        color: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .clickable-card-wrapper div.stButton > button:hover {
+        background-color: rgba(128, 128, 128, 0.04) !important;
+    }
+    
+    /* Layout components inside the card */
+    .card-logo-frame {
+        flex-shrink: 0;
+        width: 84px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .card-logo-img {
+        width: 84px;
+        height: auto;
+        max-height: 70px;
+        object-fit: contain;
+    }
+    .card-logo-fallback {
+        width: 84px;
+        height: 60px;
+        background: rgba(49, 51, 63, 0.1);
+        border-radius: 4px;
+    }
+    .card-content-frame {
+        flex-grow: 1;
+    }
+    .card-ch-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        line-height: 1.3;
+        margin-bottom: 8px;
+    }
+    
+    /* Expanded padding configuration to prevent text layout truncation */
+    .card-live-prog-box {
+        padding: 12px 14px;
+        border-radius: 6px;
+        border-left: 4px solid rgba(0,0,0,0.15);
+        font-size: 1.02rem;
+        line-height: 1.45;
+        display: block;
+        word-wrap: break-word;
+        box-sizing: border-box;
+    }
+    
+    /* Detailed Program Section Styles */
     .prog-header-title {
         font-size: 1.45rem !important;
         font-weight: 700;
@@ -78,106 +171,16 @@ st.markdown("""
     .genre-card strong {
         font-size: 1.05rem !important;
     }
-    .genre-card small, .genre-card div {
-        font-size: 0.95rem !important;
-    }
 
-    /* Cohesive Genre Shading Variants (Universal Mapping) */
-    .genre-sport {
-        background-color: #e2f0d9 !important;
-        color: #1e4620 !important;
-    }
-    .genre-movie {
-        background-color: #f2e6ff !important;
-        color: #4a235a !important;
-    }
-    .genre-default {
-        background-color: #f8f9fa !important;
-        color: #212529 !important;
-    }
+    /* Universal Shading Maps */
+    .genre-sport { background-color: #e2f0d9 !important; color: #1e4620 !important; }
+    .genre-movie { background-color: #f2e6ff !important; color: #4a235a !important; }
+    .genre-default { background-color: #f8f9fa !important; color: #212529 !important; }
 
     @media (prefers-color-scheme: dark) {
         .genre-sport { background-color: #213a22 !important; color: #e2f0d9 !important; }
         .genre-movie { background-color: #2f1d3f !important; color: #f2e6ff !important; }
         .genre-default { background-color: #262730 !important; color: #fafafa !important; }
-    }
-
-    /* Transform native button layout into an expanded, non-truncating tactile container */
-    div.stButton > button {
-        width: 100% !important;
-        text-align: left !important;
-        padding: 16px !important;
-        border-radius: 10px !important;
-        background-color: transparent !important;
-        transition: all 0.2s ease;
-        white-space: normal !important;
-        word-break: break-word !important;
-        display: block !important;
-    }
-    
-    /* Dynamic selection states using current color variables */
-    div.stButton > button.btn-active {
-        border: 2px solid currentColor !important;
-        background-color: rgba(128, 128, 128, 0.08) !important;
-    }
-    
-    div.stButton > button.btn-normal {
-        border: 2px solid rgba(128, 128, 128, 0.15) !important;
-        background-color: transparent !important;
-    }
-    
-    div.stButton > button:hover {
-        background-color: rgba(49, 51, 63, 0.04) !important;
-        border-color: rgba(49, 51, 63, 0.35) !important;
-    }
-
-    /* Layout internal components inside the button flex matrix */
-    .btn-flex-container {
-        display: flex;
-        align-items: flex-start;
-        gap: 16px;
-        width: 100%;
-        text-align: left;
-    }
-    .btn-logo-frame {
-        flex-shrink: 0;
-        width: 84px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .btn-logo-img {
-        width: 84px;
-        height: auto;
-        max-height: 70px;
-        object-fit: contain;
-    }
-    .btn-logo-fallback {
-        width: 84px;
-        height: 60px;
-        background: rgba(49, 51, 63, 0.1);
-        border-radius: 4px;
-    }
-    .btn-content-frame {
-        flex-grow: 1;
-    }
-    .btn-ch-title {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: inherit;
-        line-height: 1.3;
-        margin-bottom: 8px;
-    }
-    .btn-live-prog-box {
-        padding: 12px 14px;
-        border-radius: 6px;
-        border-left: 4px solid rgba(0,0,0,0.15);
-        font-size: 1.02rem;
-        line-height: 1.45;
-        display: block;
-        word-wrap: break-word;
-        width: 100%;
-        box-sizing: border-box;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -223,30 +226,20 @@ def parse_xmltv_datetime(dt_str, tz_info):
         return None
 
 def get_genre_info(category_text):
-    """Evaluates multi-genre strings and returns formatting classes and tags."""
     if not category_text:
         return "genre-default", ""
-    
     cat_lower = category_text.lower()
     if "sport" in cat_lower or "sports" in cat_lower:
         return "genre-sport", f" | ({category_text})"
     if "movie" in cat_lower or "film" in cat_lower:
         return "genre-movie", f" | ({category_text})"
-        
     return "genre-default", f" | ({category_text})"
 
 def process_epg_stream(file_obj, max_future_hours, tz_info):
     now_local = datetime.now(timezone.utc).astimezone(tz_info)
-    
-    if file_obj.name.endswith('.gz'):
-        context_stream = gzip.open(file_obj, 'rb')
-    else:
-        context_stream = file_obj
+    context_stream = gzip.open(file_obj, 'rb') if file_obj.name.endswith('.gz') else file_obj
 
-    channels = {}
-    groups = set()
-    programmes = {}
-
+    channels, groups, programmes = {}, set(), {}
     context = ET.iterparse(context_stream, events=('end',))
     
     for event, elem in context:
@@ -255,112 +248,78 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
             display_name = elem.find('display-name').text if elem.find('display-name') is not None else ch_id
             group_tag = elem.find('group')
             group_name = group_tag.text if group_tag is not None else None
-            
             icon_tag = elem.find('icon')
             logo_url = icon_tag.get('src') if icon_tag is not None else None
             
             channels[ch_id] = {"name": display_name, "group": group_name, "logo": logo_url}
-            if group_name:
-                groups.add(group_name)
+            if group_name: groups.add(group_name)
             programmes[ch_id] = []
             elem.clear()
             
         elif elem.tag == 'programme':
             ch_id = elem.get('channel')
-            start_raw = elem.get('start', '')
-            stop_raw = elem.get('stop', '')
-            
-            start_dt = parse_xmltv_datetime(start_raw, tz_info)
-            stop_dt = parse_xmltv_datetime(stop_raw, tz_info)
+            start_dt = parse_xmltv_datetime(elem.get('start', ''), tz_info)
+            stop_dt = parse_xmltv_datetime(elem.get('stop', ''), tz_info)
             
             if start_dt and stop_dt:
                 is_current = (start_dt <= now_local < stop_dt)
                 is_upcoming = (now_local <= start_dt)
                 
                 if is_current or is_upcoming:
-                    if is_upcoming:
-                        if max_future_hours > 0:
-                            time_delta_hours = (start_dt - now_local).total_seconds() / 3600.0
-                            if time_delta_hours > max_future_hours:
-                                elem.clear()
-                                continue
-                        else:
-                            elem.clear()
-                            continue
+                    if is_upcoming and (max_future_hours == 0 or (start_dt - now_local).total_seconds() / 3600.0 > max_future_hours):
+                        elem.clear()
+                        continue
                     
                     title = elem.find('title').text if elem.find('title') is not None else "No Title"
                     desc = elem.find('desc').text if elem.find('desc') is not None else ""
-                    
                     categories = [cat.text for cat in elem.findall('category') if cat.text]
                     category_text = " / ".join(categories) if categories else None
                     
                     programmes.setdefault(ch_id, []).append({
-                        "start": start_dt,
-                        "stop": stop_dt,
-                        "title": title,
-                        "desc": desc,
-                        "genre": category_text,
-                        "is_current": is_current
+                        "start": start_dt, "stop": stop_dt, "title": title,
+                        "desc": desc, "genre": category_text, "is_current": is_current
                     })
             elem.clear()
 
-    if file_obj.name.endswith('.gz'):
-        context_stream.close()
-
-    for cid in programmes:
-        programmes[cid] = sorted(programmes[cid], key=lambda x: x['start'])
-
+    if file_obj.name.endswith('.gz'): context_stream.close()
+    for cid in programmes: programmes[cid] = sorted(programmes[cid], key=lambda x: x['start'])
     return sorted(list(groups)), channels, programmes
 
 if uploaded_file is not None:
     available_groups, channel_map, epg_data = process_epg_stream(uploaded_file, lookahead_hours, target_tz)
     
-    # --- Form-based Explicit Search ---
     with st.form(key="search_form"):
         filter_col1, filter_col2 = st.columns([2, 1])
         with filter_col1:
             search_query = st.text_input("🔍 Search Channel Name or Program Title", "").strip().lower()
         with filter_col2:
             selected_group = st.selectbox("Category Group Filter", options=["All Groups"] + available_groups)
-        search_submitted = st.form_submit_button("Search")
+        st.form_submit_button("Search")
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
-    
     filtered_channels = []
     for cid, cinfo in channel_map.items():
-        if selected_group != "All Groups" and cinfo['group'] != selected_group:
-            continue
-        ch_name_match = search_query in cinfo['name'].lower()
-        schedule = epg_data.get(cid, [])
-        prog_match = any(search_query in p['title'].lower() for p in schedule)
-        
-        if not search_query or ch_name_match or prog_match:
+        if selected_group != "All Groups" and cinfo['group'] != selected_group: continue
+        if not search_query or search_query in cinfo['name'].lower() or any(search_query in p['title'].lower() for p in epg_data.get(cid, [])):
             filtered_channels.append(cid)
             
     if not filtered_channels:
-        st.warning("No matching channels or program entries found.")
+        st.warning("No matching channels found.")
     else:
         total_channels = len(filtered_channels)
-        
         if per_page == "All":
             page_channels = filtered_channels
         else:
             per_page = int(per_page)
             chunks = (total_channels + per_page - 1) // per_page
-            current_page = st.number_input(f"Page (1 of {chunks})", min_value=1, max_value=chunks, value=1, step=1)
-            start_idx = (current_page - 1) * per_page
-            end_idx = min(start_idx + per_page, total_channels)
-            page_channels = filtered_channels[start_idx:end_idx]
-            st.caption(f"Showing results {start_idx + 1}–{end_idx} out of {total_channels} filtered channels")
+            current_page = st.number_input(f"Page (1 of {chunks})", min_value=1, max_value=chunks, value=1)
+            page_channels = filtered_channels[(current_page - 1) * per_page: min(((current_page - 1) * per_page) + per_page, total_channels)]
 
-        # Track selected channel in session state
         if "active_channel_id" not in st.session_state:
             st.session_state.active_channel_id = page_channels[0] if page_channels else None
 
-        # Grid Split Layout
         left_pane, right_pane = st.columns([2, 1.2], gap="medium")
         
-        # Left Pane Area: Touch-Optimized Channel Directory (Unified Active Card Button Targets)
         with left_pane:
             st.markdown("### 🗺️ Channel Directory")
             
@@ -371,60 +330,44 @@ if uploaded_file is not None:
                 group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
                 
                 is_active = (cid == st.session_state.active_channel_id)
-                btn_state_class = "btn-active" if is_active else "btn-normal"
+                card_state_class = "card-active" if is_active else "card-normal"
                 
-                # Render logo asset block
                 if cinfo.get("logo"):
-                    logo_html = f'<div class="btn-logo-frame"><img src="{cinfo["logo"]}" class="btn-logo-img"/></div>'
+                    logo_html = f'<div class="card-logo-frame"><img src="{cinfo["logo"]}" class="card-logo-img"/></div>'
                 else:
-                    logo_html = '<div class="btn-logo-frame"><div class="btn-logo-fallback"></div></div>'
+                    logo_html = '<div class="card-logo-frame"><div class="card-logo-fallback"></div></div>'
                 
-                # Render current program details block inside card content
                 if current_prog:
                     remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
                     bg_class, genre_text = get_genre_info(current_prog['genre'])
                     prog_html = f"""
-                    <div class="btn-live-prog-box {bg_class}">
+                    <div class="card-live-prog-box {bg_class}">
                         Now: {current_prog['title']} — {remaining_mins}m left{genre_text}
                     </div>
                     """
                 else:
-                    prog_html = '<div class="btn-live-prog-box genre-default">[No Information]</div>'
+                    prog_html = '<div class="card-live-prog-box genre-default">[No Information]</div>'
                 
-                # Inject a single integrated HTML layout directly into the button text parameter
-                integrated_card_html = f"""
-                <div class="btn-flex-container">
-                    {logo_html}
-                    <div class="btn-content-frame">
-                        <div class="btn-ch-title">{cinfo['name']}{group_badge}</div>
-                        {prog_html}
+                # Render structural markup card and overlay transparent button container sequentially
+                st.markdown(f"""
+                <div class="clickable-card-wrapper">
+                    <div class="ch-row-card {card_state_class}">
+                        {logo_html}
+                        <div class="card-content-frame">
+                            <div class="card-ch-title">{cinfo['name']}{group_badge}</div>
+                            {prog_html}
+                        </div>
                     </div>
                 </div>
-                """
-                
-                # The execution wrapper is explicitly mapped to class selectors to format the bounding container
-                if st.button(integrated_card_html, key=f"ch_card_click_{cid}", type="secondary"):
-                    st.session_state.active_channel_id = cid
-                    st.rerun()
-                
-                # Explicitly class-inject individual buttons based on state rules via script post-evaluation
-                st.markdown(f"""
-                <script>
-                    var buttons = window.parent.document.querySelectorAll("button");
-                    for (var i = 0; i < buttons.length; i++) {{
-                        if (buttons[i].querySelector("[key='ch_card_click_{cid}']") || buttons[i].innerText.includes("{cinfo['name']}")) {{
-                            buttons[i].classList.add("{btn_state_class}");
-                        }}
-                    }}
-                </script>
                 """, unsafe_allow_html=True)
                 
-                st.markdown("<div style='margin-bottom:12px;'></div>", unsafe_allow_html=True)
-        
-        # Right Pane Area: Schedule Details View
+                # Position button precisely on top of the DOM layout wrapper object boundary
+                if st.button("", key=f"overlay_click_{cid}"):
+                    st.session_state.active_channel_id = cid
+                    st.rerun()
+
         with right_pane:
             active_cid = st.session_state.active_channel_id
-            
             if active_cid not in page_channels and page_channels:
                 active_cid = page_channels[0]
                 st.session_state.active_channel_id = active_cid
@@ -433,19 +376,9 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                if cinfo.get("logo"):
-                    logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:8px; border-radius:4px;"/> | {cinfo["name"]}'
-                else:
-                    logo_header_html = f'📺 {cinfo["name"]}'
-                
-                st.markdown(f"""
-                <div class="prog-header-title">
-                    {logo_header_html}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                if cinfo['group']:
-                    st.caption(f"Group Category: **{cinfo['group']}**")
+                logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:8px; border-radius:4px;"/> | {cinfo["name"]}' if cinfo.get("logo") else f'📺 {cinfo["name"]}'
+                st.markdown(f'<div class="prog-header-title">{logo_header_html}</div>', unsafe_allow_html=True)
+                if cinfo['group']: st.caption(f"Group Category: **{cinfo['group']}**")
                 st.markdown("---")
                 
                 current_prog = next((p for p in active_schedule if p['is_current']), None)
@@ -454,24 +387,10 @@ if uploaded_file is not None:
                 if current_prog:
                     bg_class, genre_text = get_genre_info(current_prog['genre'])
                     st.markdown(f"### 🟢 Now Playing")
-                    st.markdown(f"""
-                    <div class="genre-card {bg_class}">
-                        <strong>⏱️ {current_prog['start'].strftime('%H:%M')}</strong> — 
-                        <strong>{current_prog['title']}</strong>{genre_text}<br/>
-                        <div style='margin-top: 6px;'>{current_prog['desc'] if current_prog['desc'] else ''}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {current_prog["start"].strftime("%H:%M")}</strong> — <strong>{current_prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{current_prog["desc"]}</div></div>', unsafe_allow_html=True)
                 
                 if future_progs:
                     st.markdown(f"### ⏭️ Upcoming")
                     for prog in future_progs:
                         bg_class, genre_text = get_genre_info(prog['genre'])
-                        st.markdown(f"""
-                        <div class="genre-card {bg_class}">
-                            <strong>⏱️ {prog['start'].strftime('%H:%M')}</strong> — 
-                            <strong>{prog['title']}</strong>{genre_text}<br/>
-                            <div style='margin-top: 6px;'>{prog['desc'] if prog['desc'] else ''}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                elif not current_prog and not future_progs:
-                    st.info("No localized scheduling data within selected window.")
+                        st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {prog["start"].strftime("%H:%M")}</strong> — <strong>{prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{prog["desc"]}</div></div>', unsafe_allow_html=True)
