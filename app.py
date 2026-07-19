@@ -7,6 +7,7 @@ st.set_page_config(page_title="Easy EPG", layout="wide")
 
 # --- Security Gateway ---
 def check_password():
+    """Returns True if the user entered the correct password."""
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
 
@@ -14,20 +15,24 @@ def check_password():
         return True
 
     st.subheader("🔒 Access Restricted")
+    
     with st.form(key="login_form", clear_on_submit=False):
         user_input = st.text_input("Enter Passphrase Key", type="password")
         submit_button = st.form_submit_button(label="Verify Key & Access")
+        
         if submit_button:
             if user_input == st.secrets["access_password"]:
                 st.session_state.password_correct = True
                 st.rerun()
             else:
                 st.error("Invalid Passphrase Token.")
+                
     return False
 
 if not check_password():
     st.stop()
 
+# --- Post-Authentication Pipeline ---
 st.title("📺 Easy EPG")
 
 # --- Custom UI Pane Constraints & Global Theme Tints ---
@@ -273,16 +278,22 @@ if uploaded_file is not None:
                             st.subheader("📺")
                             
                     with card_text_col:
-                        # Downscaled size hierarchy layout
-                        st.markdown(f'<p class="dir-ch-title">{cinfo["name"]}</p>', unsafe_allow_html=True)
+                        st.html(f'<p class="dir-ch-title">{cinfo["name"]}</p>')
                         if group_badge:
                             st.caption(group_badge)
                             
                     if current_prog:
                         remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
                         genre_label = f" [{current_prog['genre']}]" if current_prog['genre'] else ""
-                        st.markdown(f"**Now Playing:** {current_prog['title']}")
-                        st.caption(f"⏱️ {remaining_mins} minutes remaining{genre_label}")
+                        g_class = get_genre_style_class(current_prog['genre'])
+                        
+                        # Re-instating left-pane colorization logic via st.html 
+                        st.html(f"""
+                        <div class="schedule-detail-card {g_class}" style="padding: 10px; margin-bottom: 10px;">
+                            <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 2px;">Now Playing: {current_prog['title']}</div>
+                            <div style="font-size: 0.75rem; opacity: 0.8;">⏱️ {remaining_mins} minutes remaining{genre_label}</div>
+                        </div>
+                        """)
                     else:
                         st.caption("ℹ️ No scheduling metadata captured for this window.")
                     
@@ -301,7 +312,7 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                # Dynamic visual execution block without template breaking logic
+                # Executing flexbox layout explicitly through st.html to evade Markdown DOM tampering
                 if cinfo.get("logo"):
                     logo_segment = f'<img src="{cinfo["logo"]}" class="right-header-logo-img" />'
                 else:
@@ -312,7 +323,7 @@ if uploaded_file is not None:
                 else:
                     group_segment = ''
                 
-                st.markdown(f"""
+                st.html(f"""
                 <div class="right-header-container">
                     <div class="right-header-logo-box">
                         {logo_segment}
@@ -322,7 +333,7 @@ if uploaded_file is not None:
                         {group_segment}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
                             
                 st.markdown("---")
                 
@@ -334,12 +345,12 @@ if uploaded_file is not None:
                     g_class = get_genre_style_class(current_prog['genre'])
                     genre_header = f" | {current_prog['genre']}" if current_prog['genre'] else ""
                     
-                    st.markdown(f"""
+                    st.html(f"""
                     <div class="schedule-detail-card {g_class}">
                         <h4>⏱️ {current_prog['start'].strftime('%H:%M')} — {current_prog['title']}{genre_header}</h4>
                         <p style="margin-top:8px; line-height:1.5;">{current_prog['desc']}</p>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """)
                 
                 if future_progs:
                     st.markdown("### ⏭️ Up Next")
@@ -347,11 +358,11 @@ if uploaded_file is not None:
                         g_class = get_genre_style_class(prog['genre'])
                         genre_header = f" | {prog['genre']}" if prog['genre'] else ""
                         
-                        st.markdown(f"""
+                        st.html(f"""
                         <div class="schedule-detail-card {g_class}">
                             <strong>⏱️ {prog['start'].strftime('%H:%M')} — {prog['title']}</strong>{genre_header}
                             <p style="margin-top:4px; font-size:0.95rem; line-height:1.4; opacity:0.9;">{prog['desc']}</p>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """)
                 elif not current_prog and not future_progs:
                     st.info("No active data timelines mapped for this tracking block.")
