@@ -54,6 +54,40 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
+    /* Fixed Proportional Header Box for Right Sidebar */
+    .right-header-container {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+        margin-bottom: 12px;
+    }
+    .right-header-logo-box {
+        width: 70px;
+        height: 70px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .right-header-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .right-header-text-box {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .right-header-title {
+        font-size: 1.8rem !important;
+        font-weight: 700 !important;
+        margin: 0 !important;
+        line-height: 1.2 !important;
+    }
+
     /* Program Guide Info Cards */
     .schedule-detail-card {
         padding: 14px;
@@ -258,18 +292,25 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                # --- Fixed Native Header Block with Dynamic Logo Rendering ---
-                with st.container():
-                    header_logo_col, header_text_col = st.columns([1, 4])
-                    with header_logo_col:
-                        if cinfo.get("logo"):
-                            st.image(cinfo["logo"], use_container_width=True)
-                        else:
-                            st.markdown("## 📺")
-                    with header_text_col:
-                        st.markdown(f"## {cinfo['name']}")
-                        if cinfo['group']: 
-                            st.caption(f"Category Group: **{cinfo['group']}**")
+                # --- Fixed Proportional Header Core ---
+                if cinfo.get("logo"):
+                    logo_segment = f'<img src="{cinfo["logo"]}" class="right-header-logo-img" />'
+                else:
+                    logo_segment = '<span style="font-size: 2.5rem;">📺</span>'
+                    
+                group_segment = f'<span style="font-size: 0.85rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Category Group: <b>{cinfo["group"]}</b></span>' if cinfo['group'] else ''
+                
+                st.markdown(f"""
+                <div class="right-header-container">
+                    <div class="right-header-logo-box">
+                        {logo_segment}
+                    </div>
+                    <div class="right-header-text-box">
+                        <h2 class="right-header-title">{cinfo['name']}</h2>
+                        {group_segment}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                             
                 st.markdown("---")
                 
