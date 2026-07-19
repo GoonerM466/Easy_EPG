@@ -30,7 +30,7 @@ if not check_password():
 
 st.title("📺 Easy EPG")
 
-# --- Optimized Styling Injection ---
+# --- Optimized Layout & Native Button Interception Styling ---
 st.markdown("""
 <style>
     [data-testid="stHorizontalBlock"] {
@@ -49,19 +49,22 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
-    /* Master Card Element Frame */
+    /* Wrap each channel entry block inside a relative coordinate engine */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        position: relative !important;
+        margin-bottom: -12px;
+    }
+
+    /* The visual container card layer */
     .ch-row-card {
         width: 100%;
         padding: 16px;
         border-radius: 10px;
         box-sizing: border-box;
-        transition: background-color 0.2s ease, border-color 0.2s ease;
         display: flex;
         align-items: flex-start;
         gap: 16px;
-        margin-bottom: 14px;
-        cursor: pointer;
-        user-select: none;
+        pointer-events: none; /* Let clicks pass straight through the text/images to the button beneath */
     }
     
     .card-active {
@@ -72,14 +75,38 @@ st.markdown("""
         border: 2px solid rgba(128, 128, 128, 0.15) !important;
         background-color: transparent;
     }
-    .ch-row-card:hover {
-        background-color: rgba(128, 128, 128, 0.04);
-        border-color: rgba(128, 128, 128, 0.3);
+
+    /* Force the native Streamlit button container to overlay perfectly above the card layer */
+    div.stButton {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: calc(100% - 14px) !important;
+        z-index: 5 !important;
+    }
+    
+    /* Make the native button completely transparent, filling the geometric boundary */
+    div.stButton > button {
+        width: 100% !important;
+        height: 100% !important;
+        background-color: transparent !important;
+        border: 2px solid transparent !important;
+        color: transparent !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 10px !important;
+    }
+    
+    /* Add tactile visual feedback states directly to the underlying card structure when hovering the hidden top button */
+    div.stButton > button:hover {
+        border: 2px solid rgba(128, 128, 128, 0.35) !important;
+        background-color: rgba(128, 128, 128, 0.04) !important;
     }
 
     .card-logo-frame {
-        flex-shrink: 0;
         width: 84px;
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -276,11 +303,7 @@ if uploaded_file is not None:
             current_page = st.number_input(f"Page (1 of {chunks})", min_value=1, max_value=chunks, value=1)
             page_channels = filtered_channels[(current_page - 1) * per_page: min(((current_page - 1) * per_page) + per_page, total_channels)]
 
-        # Read URL params to drive click mutations
-        url_params = st.query_params
-        if "selected_channel" in url_params:
-            st.session_state.active_channel_id = url_params["selected_channel"]
-        elif "active_channel_id" not in st.session_state and page_channels:
+        if "active_channel_id" not in st.session_state and page_channels:
             st.session_state.active_channel_id = page_channels[0]
 
         left_pane, right_pane = st.columns([2, 1.2], gap="medium")
@@ -313,27 +336,23 @@ if uploaded_file is not None:
                 else:
                     prog_html = '<div class="card-live-prog-box genre-default">[No Information]</div>'
                 
-                # Render clean HTML matrix with embedded navigation assignment
-                card_markup = f"""
-                <div class="ch-row-card {card_state_class}" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', value: '{cid}'}}, '*')">
+                # Render static CSS visual representation safely via st.markdown
+                st.markdown(f"""
+                <div class="ch-row-card {card_state_class}">
                     {logo_html}
                     <div class="card-content-frame">
                         <div class="card-ch-title">{cinfo['name']}{group_badge}</div>
                         {prog_html}
                     </div>
                 </div>
+                """, unsafe_allow_html=True)
                 
-                <script>
-                    // Fallback anchor alignment route parsing logic to ensure standard location transitions inside web frames
-                    var card = document.currentScript.previousElementSibling;
-                    card.addEventListener('click', function() {{
-                        const url = new URL(window.parent.location.href);
-                        url.searchParams.set('selected_channel', '{cid}');
-                        window.parent.location.href = url.toString();
-                    }});
-                </script>
-                """
-                st.html(card_markup)
+                # Render an invisible native button directly on top of the layout matrix using layout coordinates
+                if st.button("", key=f"overlay_click_native_{cid}"):
+                    st.session_state.active_channel_id = cid
+                    st.rerun()
+                
+                st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
 
         with right_pane:
             active_cid = st.session_state.active_channel_id
@@ -346,7 +365,7 @@ if uploaded_file is not None:
                 cinfo = channel_map[active_cid]
                 
                 logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:8px; border-radius:4px;"/> | {cinfo["name"]}' if cinfo.get("logo") else f'📺 {cinfo["name"]}'
-                st.html(f'<div class="prog-header-title">{logo_header_html}</div>')
+                st.markdown(f'<div class="prog-header-title">{logo_header_html}</div>', unsafe_allow_html=True)
                 if cinfo['group']: st.caption(f"Group Category: **{cinfo['group']}**")
                 st.markdown("---")
                 
@@ -356,10 +375,10 @@ if uploaded_file is not None:
                 if current_prog:
                     bg_class, genre_text = get_genre_info(current_prog['genre'])
                     st.markdown(f"### 🟢 Now Playing")
-                    st.html(f'<div class="genre-card {bg_class}"><strong>⏱️ {current_prog["start"].strftime("%H:%M")}</strong> — <strong>{current_prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{current_prog["desc"]}</div></div>')
+                    st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {current_prog["start"].strftime("%H:%M")}</strong> — <strong>{current_prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{current_prog["desc"]}</div></div>', unsafe_allow_html=True)
                 
                 if future_progs:
                     st.markdown(f"### ⏭️ Upcoming")
                     for prog in future_progs:
                         bg_class, genre_text = get_genre_info(prog['genre'])
-                        st.html(f'<div class="genre-card {bg_class}"><strong>⏱️ {prog["start"].strftime("%H:%M")}</strong> — <strong>{prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{prog["desc"]}</div></div>')
+                        st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {prog["start"].strftime("%H:%M")}</strong> — <strong>{prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{prog["desc"]}</div></div>', unsafe_allow_html=True)
