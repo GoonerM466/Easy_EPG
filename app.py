@@ -35,7 +35,37 @@ if not check_password():
 # --- Post-Authentication Pipeline ---
 st.title("📺 Easy EPG")
 
-# --- Main Page Configuration Controls ---
+# --- Custom Styling Injection (For Genre Visual Shading Cards) ---
+st.markdown("""
+<style>
+    .genre-card {
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        border-left: 5px solid rgba(0,0,0,0.1);
+    }
+    .genre-sport {
+        background-color: #e2f0d9 !important;
+        color: #1e4620 !important;
+    }
+    .genre-movie {
+        background-color: #f2e6ff !important;
+        color: #4a235a !important;
+    }
+    .genre-default {
+        background-color: #f8f9fa !important;
+        color: #212529 !important;
+    }
+    /* Dark-mode safety adaptations */
+    @media (prefers-color-scheme: dark) {
+        .genre-sport { background-color: #273e28 !important; color: #e2f0d9 !important; }
+        .genre-movie { background-color: #3b254f !important; color: #f2e6ff !important; }
+        .genre-default { background-color: #262730 !important; color: #fafafa !important; }
+    }
+</style>
+""", unsafe_allowed_html=True)
+
+# --- Configuration Controls ---
 config_col1, config_col2, config_col3 = st.columns(3)
 
 with config_col1:
@@ -67,7 +97,6 @@ with config_col3:
 uploaded_file = st.file_uploader("Load Local EPG File", type=["xml", "gz"])
 
 def parse_xmltv_datetime(dt_str, tz_info):
-    """Parses standard XMLTV date string, enforces UTC normalization, shifts to target timezone."""
     try:
         parts = dt_str.split()
         base_dt = datetime.strptime(parts[0][:14], "%Y%m%d%H%M%S")
@@ -76,8 +105,23 @@ def parse_xmltv_datetime(dt_str, tz_info):
     except (ValueError, IndexError):
         return None
 
+def get_genre_class_and_text(category_text):
+    """Maps XML TV category fields to custom CSS classes and extracts clean text."""
+    if not category_text:
+        return "genre-default", ""
+    
+    cat_lower = category_text.lower()
+    
+    # Sports normalization
+    if "sport" in cat_lower or "sports" in cat_lower:
+        return "genre-sport", f" | 🏷️ {category_text}"
+    # Movies normalization
+    if "movie" in cat_lower or "film" in cat_lower:
+        return "genre-movie", f" | 🎬 {category_text}"
+        
+    return "genre-default", f" | 📂 {category_text}"
+
 def process_epg_stream(file_obj, max_future_hours, tz_info):
-    """Iteratively parses EPG datasets matching specific localized timeline horizons."""
     now_local = datetime.now(timezone.utc).astimezone(tz_info)
     
     if file_obj.name.endswith('.gz'):
@@ -131,11 +175,16 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
                     title = elem.find('title').text if elem.find('title') is not None else "No Title"
                     desc = elem.find('desc').text if elem.find('desc') is not None else ""
                     
+                    # Track Category / Genre metadata
+                    category_elem = elem.find('category')
+                    category_text = category_elem.text if category_elem is not None else None
+                    
                     programmes.setdefault(ch_id, []).append({
                         "start": start_dt,
                         "stop": stop_dt,
                         "title": title,
                         "desc": desc,
+                        "genre": category_text,
                         "is_current": is_current
                     })
                     
@@ -152,7 +201,7 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
 if uploaded_file is not None:
     available_groups, channel_map, epg_data = process_epg_stream(uploaded_file, lookahead_hours, target_tz)
     
-    # --- Form-based Explicit Search & Filter Layout ---
+    # --- Form-based Explicit Search ---
     with st.form(key="search_form"):
         filter_col1, filter_col2 = st.columns([2, 1])
         with filter_col1:
@@ -164,7 +213,7 @@ if uploaded_file is not None:
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
-    # Filter channel sets dynamically across the full unpaginated dataset
+    # Filter channel sets dynamically matching text parameters across the unpaginated dataset
     filtered_channels = []
     for cid, cinfo in channel_map.items():
         if selected_group != "All Groups" and cinfo['group'] != selected_group:
@@ -180,12 +229,9 @@ if uploaded_file is not None:
     if not filtered_channels:
         st.warning("No matching channels or program entries found.")
     else:
-        # --- Pagination Core Math ---
         total_channels = len(filtered_channels)
         
         if per_page == "All":
-            chunks = 1
-            current_page = 1
             page_channels = filtered_channels
         else:
             per_page = int(per_page)
@@ -198,39 +244,69 @@ if uploaded_file is not None:
             
             st.caption(f"Showing results {start_idx + 1}–{end_idx} out of {total_channels} filtered channels")
 
-        # --- Render Layout Loop ---
+        # --- Dynamic Header Construction for Accordion View ---
+        header_to_cid_map = {}
+        header_options_list = []
+        
         for cid in page_channels:
             schedule = epg_data.get(cid, [])
             cinfo = channel_map[cid]
             
             current_prog = next((p for p in schedule if p['is_current']), None)
-            future_progs = [p for p in schedule if not p['is_current'] and p['start'] > now_runtime]
-            
             group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
             
             if current_prog:
                 remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
                 time_str = current_prog['start'].strftime('%H:%M')
-                
                 desc_inline = f" — {current_prog['desc']}" if current_prog['desc'] else ""
                 header_string = f"🔹 {cinfo['name']}{group_badge} — NOW: {time_str} | {current_prog['title']} ({remaining_mins}m left){desc_inline}"
             else:
                 header_string = f"🔹 {cinfo['name']}{group_badge} — [No Information]"
                 
-            with st.expander(header_string):
-                if current_prog:
-                    st.markdown(f"### 🟢 Now Playing")
-                    st.markdown(f"**⏱️ {current_prog['start'].strftime('%H:%M')}** — **{current_prog['title']}**")
-                    if current_prog['desc']:
-                        st.caption(current_prog['desc'])
-                    st.markdown("---")
-                
-                if future_progs:
-                    st.markdown(f"### ⏭️ Upcoming")
-                    for prog in future_progs:
-                        st.markdown(f"**⏱️ {prog['start'].strftime('%H:%M')}** — **{prog['title']}**")
-                        if prog['desc']:
-                            st.caption(prog['desc'])
-                        st.markdown("---")
-                elif not current_prog and not future_progs:
-                    st.info("No localized scheduling data within selected window.")
+            header_to_cid_map[header_string] = cid
+            header_options_list.append(header_string)
+
+        st.markdown("### 🗺️ Channel Directory")
+        st.caption("Selecting a new channel closes the previous entry to save screen space.")
+        
+        # Accordion-enforcer selector component
+        selected_header = st.radio(
+            "Select Channel to Expand Details",
+            options=header_options_list,
+            label_visibility="collapsed"
+        )
+        
+        # --- Expanded Content Target Area ---
+        if selected_header:
+            active_cid = header_to_cid_map[selected_header]
+            active_schedule = epg_data.get(active_cid, [])
+            
+            current_prog = next((p for p in active_schedule if p['is_current']), None)
+            future_progs = [p for p in active_schedule if not p['is_current'] and p['start'] > now_runtime]
+            
+            st.markdown("---")
+            
+            if current_prog:
+                css_class, genre_text = get_genre_class_and_text(current_prog['genre'])
+                st.markdown(f"### 🟢 Now Playing")
+                st.markdown(f"""
+                <div class="genre-card {css_class}">
+                    <strong>⏱️ {current_prog['start'].strftime('%H:%M')}</strong> — 
+                    <strong>{current_prog['title']}</strong>{genre_text}<br/>
+                    <small>{current_prog['desc'] if current_prog['desc'] else ''}</small>
+                </div>
+                """, unsafe_allowed_html=True)
+            
+            if future_progs:
+                st.markdown(f"### ⏭️ Upcoming")
+                for prog in future_progs:
+                    css_class, genre_text = get_genre_class_and_text(prog['genre'])
+                    st.markdown(f"""
+                    <div class="genre-card {css_class}">
+                        <strong>⏱️ {prog['start'].strftime('%H:%M')}</strong> — 
+                        <strong>{prog['title']}</strong>{genre_text}<br/>
+                        <small>{prog['desc'] if prog['desc'] else ''}</small>
+                    </div>
+                    """, unsafe_allowed_html=True)
+            elif not current_prog and not future_progs:
+                st.info("No localized scheduling data within selected window.")
