@@ -7,7 +7,6 @@ st.set_page_config(page_title="Easy EPG", layout="wide")
 
 # --- Security Gateway ---
 def check_password():
-    """Returns True if the user entered the correct password."""
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
 
@@ -15,43 +14,34 @@ def check_password():
         return True
 
     st.subheader("🔒 Access Restricted")
-    
     with st.form(key="login_form", clear_on_submit=False):
         user_input = st.text_input("Enter Passphrase Key", type="password")
         submit_button = st.form_submit_button(label="Verify Key & Access")
-        
         if submit_button:
             if user_input == st.secrets["access_password"]:
                 st.session_state.password_correct = True
                 st.rerun()
             else:
                 st.error("Invalid Passphrase Token.")
-                
     return False
 
 if not check_password():
     st.stop()
 
-# --- Post-Authentication Pipeline ---
 st.title("📺 Easy EPG")
 
-# --- Custom UI Engine Styling Injection ---
+# --- Optimized Styling Injection ---
 st.markdown("""
 <style>
-    /* Force independent layout scrolling zones */
     [data-testid="stHorizontalBlock"] {
         height: 78vh;
         overflow: hidden;
     }
-    
-    /* Left Pane: Directory Scroll */
     [data-testid="stHorizontalBlock"] > div:nth-child(1) {
         max-height: 78vh;
         overflow-y: auto !important;
         padding-right: 15px;
     }
-    
-    /* Right Pane: Program Details Scroll */
     [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         max-height: 78vh;
         overflow-y: auto !important;
@@ -59,14 +49,7 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
-    /* Absolute Overlay Container for Tap Zones */
-    .clickable-card-wrapper {
-        position: relative;
-        width: 100%;
-        margin-bottom: 16px;
-    }
-
-    /* The visual block rendered via Markdown */
+    /* Master Card Element Frame */
     .ch-row-card {
         width: 100%;
         padding: 16px;
@@ -76,9 +59,11 @@ st.markdown("""
         display: flex;
         align-items: flex-start;
         gap: 16px;
+        margin-bottom: 14px;
+        cursor: pointer;
+        user-select: none;
     }
     
-    /* Selection Borders wrapped cleanly around the entire structure */
     .card-active {
         border: 2px solid currentColor !important;
         background-color: rgba(128, 128, 128, 0.08) !important;
@@ -87,30 +72,11 @@ st.markdown("""
         border: 2px solid rgba(128, 128, 128, 0.15) !important;
         background-color: transparent;
     }
+    .ch-row-card:hover {
+        background-color: rgba(128, 128, 128, 0.04);
+        border-color: rgba(128, 128, 128, 0.3);
+    }
 
-    /* Force the Streamlit button to fill the card container completely and become invisible */
-    .clickable-card-wrapper div.stButton {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 10;
-    }
-    .clickable-card-wrapper div.stButton > button {
-        width: 100% !important;
-        height: 100% !important;
-        background-color: transparent !important;
-        border: none !important;
-        color: transparent !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    .clickable-card-wrapper div.stButton > button:hover {
-        background-color: rgba(128, 128, 128, 0.04) !important;
-    }
-    
-    /* Layout components inside the card */
     .card-logo-frame {
         flex-shrink: 0;
         width: 84px;
@@ -140,7 +106,6 @@ st.markdown("""
         margin-bottom: 8px;
     }
     
-    /* Expanded padding configuration to prevent text layout truncation */
     .card-live-prog-box {
         padding: 12px 14px;
         border-radius: 6px;
@@ -152,7 +117,6 @@ st.markdown("""
         box-sizing: border-box;
     }
     
-    /* Detailed Program Section Styles */
     .prog-header-title {
         font-size: 1.45rem !important;
         font-weight: 700;
@@ -168,11 +132,8 @@ st.markdown("""
         border-left: 5px solid rgba(0,0,0,0.1);
         font-size: 1.0rem !important;
     }
-    .genre-card strong {
-        font-size: 1.05rem !important;
-    }
+    .genre-card strong { font-size: 1.05rem !important; }
 
-    /* Universal Shading Maps */
     .genre-sport { background-color: #e2f0d9 !important; color: #1e4620 !important; }
     .genre-movie { background-color: #f2e6ff !important; color: #4a235a !important; }
     .genre-default { background-color: #f8f9fa !important; color: #212529 !important; }
@@ -315,8 +276,12 @@ if uploaded_file is not None:
             current_page = st.number_input(f"Page (1 of {chunks})", min_value=1, max_value=chunks, value=1)
             page_channels = filtered_channels[(current_page - 1) * per_page: min(((current_page - 1) * per_page) + per_page, total_channels)]
 
-        if "active_channel_id" not in st.session_state:
-            st.session_state.active_channel_id = page_channels[0] if page_channels else None
+        # Read URL params to drive click mutations
+        url_params = st.query_params
+        if "selected_channel" in url_params:
+            st.session_state.active_channel_id = url_params["selected_channel"]
+        elif "active_channel_id" not in st.session_state and page_channels:
+            st.session_state.active_channel_id = page_channels[0]
 
         left_pane, right_pane = st.columns([2, 1.2], gap="medium")
         
@@ -348,23 +313,27 @@ if uploaded_file is not None:
                 else:
                     prog_html = '<div class="card-live-prog-box genre-default">[No Information]</div>'
                 
-                # Render structural markup card and overlay transparent button container sequentially
-                st.markdown(f"""
-                <div class="clickable-card-wrapper">
-                    <div class="ch-row-card {card_state_class}">
-                        {logo_html}
-                        <div class="card-content-frame">
-                            <div class="card-ch-title">{cinfo['name']}{group_badge}</div>
-                            {prog_html}
-                        </div>
+                # Render clean HTML matrix with embedded navigation assignment
+                card_markup = f"""
+                <div class="ch-row-card {card_state_class}" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', value: '{cid}'}}, '*')">
+                    {logo_html}
+                    <div class="card-content-frame">
+                        <div class="card-ch-title">{cinfo['name']}{group_badge}</div>
+                        {prog_html}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
                 
-                # Position button precisely on top of the DOM layout wrapper object boundary
-                if st.button("", key=f"overlay_click_{cid}"):
-                    st.session_state.active_channel_id = cid
-                    st.rerun()
+                <script>
+                    // Fallback anchor alignment route parsing logic to ensure standard location transitions inside web frames
+                    var card = document.currentScript.previousElementSibling;
+                    card.addEventListener('click', function() {{
+                        const url = new URL(window.parent.location.href);
+                        url.searchParams.set('selected_channel', '{cid}');
+                        window.parent.location.href = url.toString();
+                    }});
+                </script>
+                """
+                st.html(card_markup)
 
         with right_pane:
             active_cid = st.session_state.active_channel_id
@@ -377,7 +346,7 @@ if uploaded_file is not None:
                 cinfo = channel_map[active_cid]
                 
                 logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:8px; border-radius:4px;"/> | {cinfo["name"]}' if cinfo.get("logo") else f'📺 {cinfo["name"]}'
-                st.markdown(f'<div class="prog-header-title">{logo_header_html}</div>', unsafe_allow_html=True)
+                st.html(f'<div class="prog-header-title">{logo_header_html}</div>')
                 if cinfo['group']: st.caption(f"Group Category: **{cinfo['group']}**")
                 st.markdown("---")
                 
@@ -387,10 +356,10 @@ if uploaded_file is not None:
                 if current_prog:
                     bg_class, genre_text = get_genre_info(current_prog['genre'])
                     st.markdown(f"### 🟢 Now Playing")
-                    st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {current_prog["start"].strftime("%H:%M")}</strong> — <strong>{current_prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{current_prog["desc"]}</div></div>', unsafe_allow_html=True)
+                    st.html(f'<div class="genre-card {bg_class}"><strong>⏱️ {current_prog["start"].strftime("%H:%M")}</strong> — <strong>{current_prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{current_prog["desc"]}</div></div>')
                 
                 if future_progs:
                     st.markdown(f"### ⏭️ Upcoming")
                     for prog in future_progs:
                         bg_class, genre_text = get_genre_info(prog['genre'])
-                        st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {prog["start"].strftime("%H:%M")}</strong> — <strong>{prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{prog["desc"]}</div></div>', unsafe_allow_html=True)
+                        st.html(f'<div class="genre-card {bg_class}"><strong>⏱️ {prog["start"].strftime("%H:%M")}</strong> — <strong>{prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{prog["desc"]}</div></div>')
