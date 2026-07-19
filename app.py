@@ -35,9 +35,31 @@ if not check_password():
 # --- Post-Authentication Pipeline ---
 st.title("📺 Easy EPG")
 
-# --- Custom Styling Injection (For Genre Visual Shading Cards) ---
+# --- Custom Styling Injection (Independent Split Scroll & Genre Cards) ---
 st.markdown("""
 <style>
+    /* Force independent layout scrolling zones */
+    [data-testid="stHorizontalBlock"] {
+        height: 75vh;
+        overflow: hidden;
+    }
+    
+    /* Left Pane: Independent Directory Scroll */
+    [data-testid="stHorizontalBlock"] > div:nth-child(1) {
+        max-height: 75vh;
+        overflow-y: auto !important;
+        padding-right: 10px;
+    }
+    
+    /* Right Pane: Independent Program Details Scroll */
+    [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+        max-height: 75vh;
+        overflow-y: auto !important;
+        padding-left: 15px;
+        border-left: 1px solid rgba(49, 51, 63, 0.2);
+    }
+
+    /* Card Shading Elements */
     .genre-card {
         padding: 14px;
         border-radius: 8px;
@@ -199,7 +221,7 @@ if uploaded_file is not None:
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
-    # Global data filter processing
+    # Global filter application
     filtered_channels = []
     for cid, cinfo in channel_map.items():
         if selected_group != "All Groups" and cinfo['group'] != selected_group:
@@ -227,8 +249,8 @@ if uploaded_file is not None:
             page_channels = filtered_channels[start_idx:end_idx]
             st.caption(f"Showing results {start_idx + 1}–{end_idx} out of {total_channels} filtered channels")
 
-        # --- High Usability Split Pane Layout ---
-        left_pane, right_pane = st.columns([1, 2], gap="large")
+        # --- High Usability Independent Split-Scrolling Windows ---
+        left_pane, right_pane = st.columns([1, 2], gap="medium")
         
         header_to_cid_map = {}
         header_options_list = []
@@ -248,7 +270,7 @@ if uploaded_file is not None:
             header_to_cid_map[header_string] = cid
             header_options_list.append(header_string)
 
-        # Left Column: Sticky-style Radio selection grid acting as our directory sidebar
+        # Left Frame Area (Maintains internal scrollbar separate from main page container)
         with left_pane:
             st.markdown("### 🗺️ Channel Directory")
             selected_header = st.radio(
@@ -257,7 +279,7 @@ if uploaded_file is not None:
                 label_visibility="collapsed"
             )
         
-        # Right Column: Main Content area containing scheduling data instantly locked to top of viewport
+        # Right Frame Area (Stays static at viewport top, updating content dynamically next to choice)
         with right_pane:
             if selected_header:
                 active_cid = header_to_cid_map[selected_header]
@@ -281,7 +303,7 @@ if uploaded_file is not None:
                         <strong>{current_prog['title']}</strong>{genre_text}<br/>
                         <div style='margin-top: 6px;'>{current_prog['desc'] if current_prog['desc'] else ''}</div>
                     </div>
-                    """, unsafe_allow_html=True) # Fixed parameter syntax
+                    """, unsafe_allow_html=True)
                 
                 if future_progs:
                     st.markdown(f"### ⏭️ Upcoming")
@@ -293,6 +315,6 @@ if uploaded_file is not None:
                             <strong>{prog['title']}</strong>{genre_text}<br/>
                             <div style='margin-top: 6px;'>{prog['desc'] if prog['desc'] else ''}</div>
                         </div>
-                        """, unsafe_allow_html=True) # Fixed parameter syntax
+                        """, unsafe_allow_html=True)
                 elif not current_prog and not future_progs:
                     st.info("No localized scheduling data within selected window.")
