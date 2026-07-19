@@ -7,6 +7,7 @@ st.set_page_config(page_title="Easy EPG", layout="wide")
 
 # --- Security Gateway ---
 def check_password():
+    """Returns True if the user entered the correct password."""
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
 
@@ -14,34 +15,43 @@ def check_password():
         return True
 
     st.subheader("🔒 Access Restricted")
+    
     with st.form(key="login_form", clear_on_submit=False):
         user_input = st.text_input("Enter Passphrase Key", type="password")
         submit_button = st.form_submit_button(label="Verify Key & Access")
+        
         if submit_button:
             if user_input == st.secrets["access_password"]:
                 st.session_state.password_correct = True
                 st.rerun()
             else:
                 st.error("Invalid Passphrase Token.")
+                
     return False
 
 if not check_password():
     st.stop()
 
+# --- Post-Authentication Pipeline ---
 st.title("📺 Easy EPG")
 
-# --- Optimized Layout & Native Button Interception Styling ---
+# --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
+    /* Force independent split-column layout scroll zones */
     [data-testid="stHorizontalBlock"] {
         height: 78vh;
         overflow: hidden;
     }
+    
+    /* Left Pane: Directory Scroll Layout */
     [data-testid="stHorizontalBlock"] > div:nth-child(1) {
         max-height: 78vh;
         overflow-y: auto !important;
         padding-right: 15px;
     }
+    
+    /* Right Pane: Detailed Schedule Info Scroll Layout */
     [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         max-height: 78vh;
         overflow-y: auto !important;
@@ -49,126 +59,23 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
-    /* Wrap each channel entry block inside a relative coordinate engine */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        position: relative !important;
-        margin-bottom: -12px;
-    }
-
-    /* The visual container card layer */
-    .ch-row-card {
-        width: 100%;
-        padding: 16px;
-        border-radius: 10px;
-        box-sizing: border-box;
-        display: flex;
-        align-items: flex-start;
-        gap: 16px;
-        pointer-events: none; /* Let clicks pass straight through the text/images to the button beneath */
+    /* Program Guide Info Cards */
+    .schedule-detail-card {
+        padding: 14px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border-left: 5px solid rgba(128, 128, 128, 0.3);
+        background-color: rgba(128, 128, 128, 0.05);
     }
     
-    .card-active {
-        border: 2px solid currentColor !important;
-        background-color: rgba(128, 128, 128, 0.08) !important;
-    }
-    .card-normal {
-        border: 2px solid rgba(128, 128, 128, 0.15) !important;
-        background-color: transparent;
-    }
-
-    /* Force the native Streamlit button container to overlay perfectly above the card layer */
-    div.stButton {
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: calc(100% - 14px) !important;
-        z-index: 5 !important;
+    .genre-sport-tint {
+        border-left-color: #2e7d32 !important;
+        background-color: rgba(46, 125, 50, 0.08) !important;
     }
     
-    /* Make the native button completely transparent, filling the geometric boundary */
-    div.stButton > button {
-        width: 100% !important;
-        height: 100% !important;
-        background-color: transparent !important;
-        border: 2px solid transparent !important;
-        color: transparent !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        border-radius: 10px !important;
-    }
-    
-    /* Add tactile visual feedback states directly to the underlying card structure when hovering the hidden top button */
-    div.stButton > button:hover {
-        border: 2px solid rgba(128, 128, 128, 0.35) !important;
-        background-color: rgba(128, 128, 128, 0.04) !important;
-    }
-
-    .card-logo-frame {
-        width: 84px;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .card-logo-img {
-        width: 84px;
-        height: auto;
-        max-height: 70px;
-        object-fit: contain;
-    }
-    .card-logo-fallback {
-        width: 84px;
-        height: 60px;
-        background: rgba(49, 51, 63, 0.1);
-        border-radius: 4px;
-    }
-    .card-content-frame {
-        flex-grow: 1;
-    }
-    .card-ch-title {
-        font-size: 1.15rem;
-        font-weight: 700;
-        line-height: 1.3;
-        margin-bottom: 8px;
-    }
-    
-    .card-live-prog-box {
-        padding: 12px 14px;
-        border-radius: 6px;
-        border-left: 4px solid rgba(0,0,0,0.15);
-        font-size: 1.02rem;
-        line-height: 1.45;
-        display: block;
-        word-wrap: break-word;
-        box-sizing: border-box;
-    }
-    
-    .prog-header-title {
-        font-size: 1.45rem !important;
-        font-weight: 700;
-        margin-bottom: 4px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .genre-card {
-        padding: 12px 14px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-        border-left: 5px solid rgba(0,0,0,0.1);
-        font-size: 1.0rem !important;
-    }
-    .genre-card strong { font-size: 1.05rem !important; }
-
-    .genre-sport { background-color: #e2f0d9 !important; color: #1e4620 !important; }
-    .genre-movie { background-color: #f2e6ff !important; color: #4a235a !important; }
-    .genre-default { background-color: #f8f9fa !important; color: #212529 !important; }
-
-    @media (prefers-color-scheme: dark) {
-        .genre-sport { background-color: #213a22 !important; color: #e2f0d9 !important; }
-        .genre-movie { background-color: #2f1d3f !important; color: #f2e6ff !important; }
-        .genre-default { background-color: #262730 !important; color: #fafafa !important; }
+    .genre-movie-tint {
+        border-left-color: #6a1b9a !important;
+        background-color: rgba(106, 27, 154, 0.08) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -213,15 +120,15 @@ def parse_xmltv_datetime(dt_str, tz_info):
     except (ValueError, IndexError):
         return None
 
-def get_genre_info(category_text):
+def get_genre_style_class(category_text):
     if not category_text:
-        return "genre-default", ""
+        return ""
     cat_lower = category_text.lower()
     if "sport" in cat_lower or "sports" in cat_lower:
-        return "genre-sport", f" | ({category_text})"
+        return "genre-sport-tint"
     if "movie" in cat_lower or "film" in cat_lower:
-        return "genre-movie", f" | ({category_text})"
-    return "genre-default", f" | ({category_text})"
+        return "genre-movie-tint"
+    return ""
 
 def process_epg_stream(file_obj, max_future_hours, tz_info):
     now_local = datetime.now(timezone.utc).astimezone(tz_info)
@@ -306,7 +213,7 @@ if uploaded_file is not None:
         if "active_channel_id" not in st.session_state and page_channels:
             st.session_state.active_channel_id = page_channels[0]
 
-        left_pane, right_pane = st.columns([2, 1.2], gap="medium")
+        left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
         with left_pane:
             st.markdown("### 🗺️ Channel Directory")
@@ -315,44 +222,38 @@ if uploaded_file is not None:
                 schedule = epg_data.get(cid, [])
                 cinfo = channel_map[cid]
                 current_prog = next((p for p in schedule if p['is_current']), None)
-                group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
+                group_badge = f" • {cinfo['group']}" if cinfo['group'] else ""
                 
                 is_active = (cid == st.session_state.active_channel_id)
-                card_state_class = "card-active" if is_active else "card-normal"
                 
-                if cinfo.get("logo"):
-                    logo_html = f'<div class="card-logo-frame"><img src="{cinfo["logo"]}" class="card-logo-img"/></div>'
-                else:
-                    logo_html = '<div class="card-logo-frame"><div class="card-logo-fallback"></div></div>'
-                
-                if current_prog:
-                    remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
-                    bg_class, genre_text = get_genre_info(current_prog['genre'])
-                    prog_html = f"""
-                    <div class="card-live-prog-box {bg_class}">
-                        Now: {current_prog['title']} — {remaining_mins}m left{genre_text}
-                    </div>
-                    """
-                else:
-                    prog_html = '<div class="card-live-prog-box genre-default">[No Information]</div>'
-                
-                # Render static CSS visual representation safely via st.markdown
-                st.markdown(f"""
-                <div class="ch-row-card {card_state_class}">
-                    {logo_html}
-                    <div class="card-content-frame">
-                        <div class="card-ch-title">{cinfo['name']}{group_badge}</div>
-                        {prog_html}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Render an invisible native button directly on top of the layout matrix using layout coordinates
-                if st.button("", key=f"overlay_click_native_{cid}"):
-                    st.session_state.active_channel_id = cid
-                    st.rerun()
-                
-                st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
+                # Native structural card element wrapper
+                with st.container(border=True):
+                    card_logo_col, card_text_col = st.columns([1, 3])
+                    
+                    with card_logo_col:
+                        if cinfo.get("logo"):
+                            st.image(cinfo["logo"], use_container_width=True)
+                        else:
+                            st.subheader("📺")
+                            
+                    with card_text_col:
+                        st.markdown(f"### {cinfo['name']}")
+                        if group_badge:
+                            st.caption(group_badge)
+                            
+                    if current_prog:
+                        remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
+                        genre_label = f" [{current_prog['genre']}]" if current_prog['genre'] else ""
+                        st.markdown(f"**Now Playing:** {current_prog['title']}")
+                        st.caption(f"⏱️ {remaining_mins} minutes remaining{genre_label}")
+                    else:
+                        st.caption("ℹ️ No scheduling metadata captured for this window.")
+                    
+                    # Full-Width Interactive Control Target (100% reliable tap footprint on mobile)
+                    btn_label = "🟢 Currently Viewing Channel" if is_active else "⚡ Tap to View Detailed Guide"
+                    if st.button(btn_label, key=f"select_ch_{cid}", use_container_width=True, type="primary" if is_active else "secondary"):
+                        st.session_state.active_channel_id = cid
+                        st.rerun()
 
         with right_pane:
             active_cid = st.session_state.active_channel_id
@@ -364,21 +265,37 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:8px; border-radius:4px;"/> | {cinfo["name"]}' if cinfo.get("logo") else f'📺 {cinfo["name"]}'
-                st.markdown(f'<div class="prog-header-title">{logo_header_html}</div>', unsafe_allow_html=True)
-                if cinfo['group']: st.caption(f"Group Category: **{cinfo['group']}**")
+                st.markdown(f"## 📋 {cinfo['name']}")
+                if cinfo['group']: 
+                    st.caption(f"Category Group: **{cinfo['group']}**")
                 st.markdown("---")
                 
                 current_prog = next((p for p in active_schedule if p['is_current']), None)
                 future_progs = [p for p in active_schedule if not p['is_current'] and p['start'] > now_runtime]
                 
                 if current_prog:
-                    bg_class, genre_text = get_genre_info(current_prog['genre'])
-                    st.markdown(f"### 🟢 Now Playing")
-                    st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {current_prog["start"].strftime("%H:%M")}</strong> — <strong>{current_prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{current_prog["desc"]}</div></div>', unsafe_allow_html=True)
+                    st.markdown("### 🟢 Now Playing")
+                    g_class = get_genre_style_class(current_prog['genre'])
+                    genre_header = f" | {current_prog['genre']}" if current_prog['genre'] else ""
+                    
+                    st.markdown(f"""
+                    <div class="schedule-detail-card {g_class}">
+                        <h4>⏱️ {current_prog['start'].strftime('%H:%M')} — {current_prog['title']}{genre_header}</h4>
+                        <p style="margin-top:8px; line-height:1.5;">{current_prog['desc']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
                 if future_progs:
-                    st.markdown(f"### ⏭️ Upcoming")
+                    st.markdown("### ⏭️ Up Next")
                     for prog in future_progs:
-                        bg_class, genre_text = get_genre_info(prog['genre'])
-                        st.markdown(f'<div class="genre-card {bg_class}"><strong>⏱️ {prog["start"].strftime("%H:%M")}</strong> — <strong>{prog["title"]}</strong>{genre_text}<br/><div style="margin-top:6px;">{prog["desc"]}</div></div>', unsafe_allow_html=True)
+                        g_class = get_genre_style_class(prog['genre'])
+                        genre_header = f" | {prog['genre']}" if prog['genre'] else ""
+                        
+                        st.markdown(f"""
+                        <div class="schedule-detail-card {g_class}">
+                            <strong>⏱️ {prog['start'].strftime('%H:%M')} — {prog['title']}</strong>{genre_header}
+                            <p style="margin-top:4px; font-size:0.95rem; line-height:1.4; opacity:0.9;">{prog['desc']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                elif not current_prog and not future_progs:
+                    st.info("No active data timelines mapped for this tracking block.")
