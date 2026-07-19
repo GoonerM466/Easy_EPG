@@ -118,11 +118,23 @@ st.markdown("""
         .genre-default { background-color: #262730 !important; color: #fafafa !important; }
     }
 
-    /* Make the select buttons inside rows look clean and expand to full width */
+    /* Transform native button layout into a massive row-sized tactile click container */
     div.stButton > button {
         width: 100% !important;
-        padding: 6px 12px !important;
-        font-weight: bold !important;
+        text-align: left !important;
+        padding: 12px 16px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(49, 51, 63, 0.18) !important;
+        background-color: transparent !important;
+        transition: all 0.2s ease;
+    }
+    div.stButton > button:hover {
+        background-color: rgba(49, 51, 63, 0.04) !important;
+        border-color: rgba(49, 51, 63, 0.35) !important;
+    }
+    div.stButton > button p {
+        font-size: 1.15rem !important;
+        font-weight: 700 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -220,16 +232,29 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
             
             if start_dt and stop_dt:
                 is_current = (start_dt <= now_local < stop_dt)
-                if is_current or (now_local <= start_dt):
-                    if max_future_hours == 0 and not is_current:
-                        elem.clear()
-                        continue
+                
+                # Dynamic Schedule Boundary: Always retain the active live view.
+                # Upcoming entries match if their START time falls within the selected +X window.
+                if is_current:
+                    programmes.setdefault(ch_id, []).append({
+                        "start": start_dt,
+                        "stop": stop_dt,
+                        "title": title,
+                        "desc": desc,
+                        "genre": category_text,
+                        "is_current": True
+                    })
+                elif (now_local <= start_dt):
                     if max_future_hours > 0:
                         time_delta_hours = (start_dt - now_local).total_seconds() / 3600.0
-                        if time_delta_hours > max_future_hours and not is_current:
+                        if time_delta_hours > max_future_hours:
                             elem.clear()
                             continue
-                    
+                    else:
+                        # Window configuration is 0 (Current program only)
+                        elem.clear()
+                        continue
+                        
                     title = elem.find('title').text if elem.find('title') is not None else "No Title"
                     desc = elem.find('desc').text if elem.find('desc') is not None else ""
                     category_elem = elem.find('category')
@@ -241,7 +266,7 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
                         "title": title,
                         "desc": desc,
                         "genre": category_text,
-                        "is_current": is_current
+                        "is_current": False
                     })
             elem.clear()
 
@@ -301,7 +326,7 @@ if uploaded_file is not None:
         # Grid Split Layout
         left_pane, right_pane = st.columns([2, 1.2], gap="medium")
         
-        # Left Pane Area: Touch-Optimized Channel List
+        # Left Pane Area: Touch-Optimized Channel Directory (Full Row Interactive Targets)
         with left_pane:
             st.markdown("### 🗺️ Channel Directory")
             
@@ -311,44 +336,42 @@ if uploaded_file is not None:
                 current_prog = next((p for p in schedule if p['is_current']), None)
                 group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
                 
-                # Render touch block row layout cleanly using safe native components
-                with st.container():
-                    # Create columns inside the card to keep layout clean for touchscreen targets
-                    row_col1, row_col2 = st.columns([1, 5])
+                # Execute full structural configuration inside clean columns
+                row_col1, row_col2 = st.columns([1, 5])
+                
+                with row_col1:
+                    if cinfo.get("logo"):
+                        st.image(cinfo["logo"], width=52)
+                    else:
+                        st.markdown("<div style='height:52px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
+                
+                with row_col2:
+                    # Clean plain-text label string for native execution safety
+                    button_txt = f"{cinfo['name']}{group_badge}"
                     
-                    with row_col1:
-                        if cinfo.get("logo"):
-                            st.image(cinfo["logo"], width=50)
-                        else:
-                            st.markdown("<div style='height:50px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
+                    if st.button(button_txt, key=f"ch_row_trigger_{cid}"):
+                        st.session_state.active_channel_id = cid
+                        st.rerun()
                     
-                    with row_col2:
-                        st.markdown(f"**<span style='font-size:1.15rem;'>{cinfo['name']}</span>**{group_badge}", unsafe_allow_html=True)
+                    # Information shading panels positioned immediately below selection line
+                    if current_prog:
+                        remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
+                        bg_class, genre_text = get_genre_info(current_prog['genre'])
                         
-                        if current_prog:
-                            remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
-                            bg_class, genre_text = get_genre_info(current_prog['genre'])
-                            
-                            st.markdown(f"""
-                            <div class="ch-live-prog-box {bg_class}">
-                                Now: {current_prog['title']} — {remaining_mins}m left{genre_text}
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown('<div class="ch-live-prog-box genre-default">[No Information]</div>', unsafe_allow_html=True)
-                        
-                        # Full-width action button to select the row
-                        if st.button("Select Channel", key=f"select_btn_{cid}"):
-                            st.session_state.active_channel_id = cid
-                            st.rerun()
-                    
-                    st.markdown("<div style='margin-bottom:12px;'></div>", unsafe_allow_html=True)
+                        st.markdown(f"""
+                        <div class="ch-live-prog-box {bg_class}">
+                            Now: {current_prog['title']} — {remaining_mins}m left{genre_text}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="ch-live-prog-box genre-default">[No Information]</div>', unsafe_allow_html=True)
+                
+                st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
         
-        # Right Pane Area: Fixed Schedule Details View
+        # Right Pane Area: Schedule Details View
         with right_pane:
             active_cid = st.session_state.active_channel_id
             
-            # Reset fallback if pagination cuts out active selection range
             if active_cid not in page_channels and page_channels:
                 active_cid = page_channels[0]
                 st.session_state.active_channel_id = active_cid
