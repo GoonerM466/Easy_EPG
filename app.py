@@ -61,12 +61,14 @@ st.markdown("""
 
     /* Inline shading wrapper for channel directory rows */
     .ch-live-prog-box {
-        margin-top: 4px;
-        padding: 6px 10px;
+        margin-top: 6px;
+        padding: 8px 12px;
         border-radius: 4px;
         border-left: 3px solid rgba(0,0,0,0.1);
         font-size: 1.02rem;
+        line-height: 1.4;
         display: block;
+        word-wrap: break-word;
     }
     
     /* Font sizing adjustment inside detailed program sections */
@@ -109,15 +111,18 @@ st.markdown("""
         .genre-default { background-color: #262730 !important; color: #fafafa !important; }
     }
 
-    /* Transform native button layout into a massive row-sized tactile click container */
+    /* Transform native button layout into an expanded, non-truncating tactile container */
     div.stButton > button {
         width: 100% !important;
         text-align: left !important;
-        padding: 12px 16px !important;
+        padding: 14px 18px !important;
+        min-height: 54px !important;
         border-radius: 8px !important;
         border: 1px solid rgba(49, 51, 63, 0.18) !important;
         background-color: transparent !important;
         transition: all 0.2s ease;
+        white-space: normal !important;
+        word-break: break-word !important;
     }
     div.stButton > button:hover {
         background-color: rgba(49, 51, 63, 0.04) !important;
@@ -126,6 +131,7 @@ st.markdown("""
     div.stButton > button p {
         font-size: 1.15rem !important;
         font-weight: 700 !important;
+        line-height: 1.3 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -176,7 +182,6 @@ def get_genre_info(category_text):
         return "genre-default", ""
     
     cat_lower = category_text.lower()
-    # Scans the entire delimited string for matching keyword overrides
     if "sport" in cat_lower or "sports" in cat_lower:
         return "genre-sport", f" | ({category_text})"
     if "movie" in cat_lower or "film" in cat_lower:
@@ -240,7 +245,7 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
                     title = elem.find('title').text if elem.find('title') is not None else "No Title"
                     desc = elem.find('desc').text if elem.find('desc') is not None else ""
                     
-                    # Extract all category elements and join them via an explicit / delimiter
+                    # Extract all category elements and join them via a forward slash delimiter
                     categories = [cat.text for cat in elem.findall('category') if cat.text]
                     category_text = " / ".join(categories) if categories else None
                     
