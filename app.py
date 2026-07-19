@@ -59,39 +59,6 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
 
-    /* Cohesive block encapsulation wrapper for rows */
-    .ch-row-card {
-        display: flow-root !important;
-        width: 100%;
-        padding: 12px;
-        border-radius: 10px;
-        box-sizing: border-box;
-        transition: background-color 0.2s ease, border-color 0.2s ease;
-    }
-    
-    /* Focus and Activation Card Highlights */
-    .card-active {
-        border: 2px solid currentColor !important;
-        background-color: rgba(128, 128, 128, 0.08) !important;
-    }
-    .card-normal {
-        border: 2px solid rgba(128, 128, 128, 0.05) !important;
-        background-color: transparent;
-    }
-
-    /* Inline shading wrapper for channel directory rows */
-    .ch-live-prog-box {
-        margin-top: 8px;
-        padding: 10px 14px;
-        border-radius: 6px;
-        border-left: 4px solid rgba(0,0,0,0.15);
-        font-size: 1.02rem;
-        line-height: 1.45;
-        display: block;
-        word-wrap: break-word;
-        min-height: 56px;
-    }
-    
     /* Font sizing adjustment inside detailed program sections */
     .prog-header-title {
         font-size: 1.45rem !important;
@@ -139,23 +106,78 @@ st.markdown("""
     div.stButton > button {
         width: 100% !important;
         text-align: left !important;
-        padding: 10px 14px !important;
-        min-height: 48px !important;
-        border-radius: 6px !important;
-        border: 1px solid rgba(49, 51, 63, 0.15) !important;
-        background-color: rgba(128, 128, 128, 0.03) !important;
+        padding: 16px !important;
+        border-radius: 10px !important;
+        background-color: transparent !important;
         transition: all 0.2s ease;
         white-space: normal !important;
         word-break: break-word !important;
+        display: block !important;
     }
+    
+    /* Dynamic selection states using current color variables */
+    div.stButton > button.btn-active {
+        border: 2px solid currentColor !important;
+        background-color: rgba(128, 128, 128, 0.08) !important;
+    }
+    
+    div.stButton > button.btn-normal {
+        border: 2px solid rgba(128, 128, 128, 0.15) !important;
+        background-color: transparent !important;
+    }
+    
     div.stButton > button:hover {
-        background-color: rgba(49, 51, 63, 0.06) !important;
-        border-color: rgba(49, 51, 63, 0.3) !important;
+        background-color: rgba(49, 51, 63, 0.04) !important;
+        border-color: rgba(49, 51, 63, 0.35) !important;
     }
-    div.stButton > button p {
-        font-size: 1.15rem !important;
-        font-weight: 700 !important;
-        line-height: 1.3 !important;
+
+    /* Layout internal components inside the button flex matrix */
+    .btn-flex-container {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        width: 100%;
+        text-align: left;
+    }
+    .btn-logo-frame {
+        flex-shrink: 0;
+        width: 84px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-logo-img {
+        width: 84px;
+        height: auto;
+        max-height: 70px;
+        object-fit: contain;
+    }
+    .btn-logo-fallback {
+        width: 84px;
+        height: 60px;
+        background: rgba(49, 51, 63, 0.1);
+        border-radius: 4px;
+    }
+    .btn-content-frame {
+        flex-grow: 1;
+    }
+    .btn-ch-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: inherit;
+        line-height: 1.3;
+        margin-bottom: 8px;
+    }
+    .btn-live-prog-box {
+        padding: 12px 14px;
+        border-radius: 6px;
+        border-left: 4px solid rgba(0,0,0,0.15);
+        font-size: 1.02rem;
+        line-height: 1.45;
+        display: block;
+        word-wrap: break-word;
+        width: 100%;
+        box-sizing: border-box;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -338,7 +360,7 @@ if uploaded_file is not None:
         # Grid Split Layout
         left_pane, right_pane = st.columns([2, 1.2], gap="medium")
         
-        # Left Pane Area: Touch-Optimized Channel Directory (Full Row Interactive Targets)
+        # Left Pane Area: Touch-Optimized Channel Directory (Unified Active Card Button Targets)
         with left_pane:
             st.markdown("### 🗺️ Channel Directory")
             
@@ -349,41 +371,55 @@ if uploaded_file is not None:
                 group_badge = f" [{cinfo['group']}]" if cinfo['group'] else ""
                 
                 is_active = (cid == st.session_state.active_channel_id)
-                card_state_class = "card-active" if is_active else "card-normal"
+                btn_state_class = "btn-active" if is_active else "btn-normal"
                 
-                # Encapsulate the row contents in a unified flow-root block to clean up borders and tap zones
-                st.markdown(f'<div class="ch-row-card {card_state_class}">', unsafe_allow_html=True)
+                # Render logo asset block
+                if cinfo.get("logo"):
+                    logo_html = f'<div class="btn-logo-frame"><img src="{cinfo["logo"]}" class="btn-logo-img"/></div>'
+                else:
+                    logo_html = '<div class="btn-logo-frame"><div class="btn-logo-fallback"></div></div>'
                 
-                row_col1, row_col2 = st.columns([1.4, 5])
+                # Render current program details block inside card content
+                if current_prog:
+                    remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
+                    bg_class, genre_text = get_genre_info(current_prog['genre'])
+                    prog_html = f"""
+                    <div class="btn-live-prog-box {bg_class}">
+                        Now: {current_prog['title']} — {remaining_mins}m left{genre_text}
+                    </div>
+                    """
+                else:
+                    prog_html = '<div class="btn-live-prog-box genre-default">[No Information]</div>'
                 
-                with row_col1:
-                    # Upscaled dimension logic for proportionate sizing
-                    if cinfo.get("logo"):
-                        st.image(cinfo["logo"], width=84)
-                    else:
-                        st.markdown("<div style='height:84px; background:rgba(49,51,63,0.1); border-radius:4px;'></div>", unsafe_allow_html=True)
+                # Inject a single integrated HTML layout directly into the button text parameter
+                integrated_card_html = f"""
+                <div class="btn-flex-container">
+                    {logo_html}
+                    <div class="btn-content-frame">
+                        <div class="btn-ch-title">{cinfo['name']}{group_badge}</div>
+                        {prog_html}
+                    </div>
+                </div>
+                """
                 
-                with row_col2:
-                    button_txt = f"{cinfo['name']}{group_badge}"
-                    
-                    if st.button(button_txt, key=f"ch_row_trigger_{cid}"):
-                        st.session_state.active_channel_id = cid
-                        st.rerun()
-                    
-                    if current_prog:
-                        remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
-                        bg_class, genre_text = get_genre_info(current_prog['genre'])
-                        
-                        st.markdown(f"""
-                        <div class="ch-live-prog-box {bg_class}">
-                            Now: {current_prog['title']} — {remaining_mins}m left{genre_text}
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown('<div class="ch-live-prog-box genre-default">[No Information]</div>', unsafe_allow_html=True)
+                # The execution wrapper is explicitly mapped to class selectors to format the bounding container
+                if st.button(integrated_card_html, key=f"ch_card_click_{cid}", type="secondary"):
+                    st.session_state.active_channel_id = cid
+                    st.rerun()
                 
-                st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
+                # Explicitly class-inject individual buttons based on state rules via script post-evaluation
+                st.markdown(f"""
+                <script>
+                    var buttons = window.parent.document.querySelectorAll("button");
+                    for (var i = 0; i < buttons.length; i++) {{
+                        if (buttons[i].querySelector("[key='ch_card_click_{cid}']") || buttons[i].innerText.includes("{cinfo['name']}")) {{
+                            buttons[i].classList.add("{btn_state_class}");
+                        }}
+                    }}
+                </script>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("<div style='margin-bottom:12px;'></div>", unsafe_allow_html=True)
         
         # Right Pane Area: Schedule Details View
         with right_pane:
@@ -397,7 +433,6 @@ if uploaded_file is not None:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                # Conditional listing layout execution following user matching parameters
                 if cinfo.get("logo"):
                     logo_header_html = f'<img src="{cinfo["logo"]}" style="width:48px; height:48px; object-fit:contain; vertical-align:middle; margin-right:8px; border-radius:4px;"/> | {cinfo["name"]}'
                 else:
