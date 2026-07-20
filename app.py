@@ -1,4 +1,7 @@
 import gzip
+import io
+import re
+import requests
 import xml.etree.ElementTree as ET
 import streamlit as st
 from datetime import datetime, timezone, timedelta
@@ -7,7 +10,6 @@ st.set_page_config(page_title="Easy EPG", layout="wide")
 
 # --- Security Gateway ---
 def check_password():
-    """Returns True if the user entered the correct password."""
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
 
@@ -15,59 +17,46 @@ def check_password():
         return True
 
     st.subheader("🔒 Access Restricted")
-    
     with st.form(key="login_form", clear_on_submit=False):
         user_input = st.text_input("Enter Passphrase Key", type="password")
         submit_button = st.form_submit_button(label="Verify Key & Access")
-        
         if submit_button:
             if user_input == st.secrets["access_password"]:
                 st.session_state.password_correct = True
                 st.rerun()
             else:
                 st.error("Invalid Passphrase Token.")
-                
     return False
 
 if not check_password():
     st.stop()
 
-# --- Post-Authentication Pipeline ---
 st.title("📺 Easy EPG")
 
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
-    /* Force independent split-column layout scroll zones */
     [data-testid="stHorizontalBlock"] {
         height: 78vh;
         overflow: hidden;
     }
-    
-    /* Left Pane: Directory Scroll Layout */
     [data-testid="stHorizontalBlock"] > div:nth-child(1) {
         max-height: 78vh;
         overflow-y: auto !important;
         padding-right: 15px;
     }
-    
-    /* Right Pane: Detailed Schedule Info Scroll Layout */
     [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         max-height: 78vh;
         overflow-y: auto !important;
         padding-left: 20px;
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
-
-    /* Left Directory Custom Typography Calibration */
     .dir-ch-title {
         font-size: 1.1rem !important;
         font-weight: 600 !important;
         margin: 0 0 4px 0 !important;
         line-height: 1.2 !important;
     }
-
-    /* Fixed Proportional Header Box for Right Sidebar */
     .right-header-container {
         display: flex;
         align-items: center;
@@ -100,8 +89,6 @@ st.markdown("""
         margin: 0 !important;
         line-height: 1.2 !important;
     }
-
-    /* Program Guide Info Cards */
     .schedule-detail-card {
         padding: 14px;
         border-radius: 8px;
@@ -109,15 +96,22 @@ st.markdown("""
         border-left: 5px solid rgba(128, 128, 128, 0.3);
         background-color: rgba(128, 128, 128, 0.05);
     }
-    
     .genre-sport-tint {
         border-left-color: #2e7d32 !important;
         background-color: rgba(46, 125, 50, 0.08) !important;
     }
-    
     .genre-movie-tint {
         border-left-color: #6a1b9a !important;
         background-color: rgba(106, 27, 154, 0.08) !important;
+    }
+    .match-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        font-size: 0.7rem;
+        border-radius: 4px;
+        margin-bottom: 4px;
+        background-color: rgba(255, 255, 255, 0.15);
+        color: #fff;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -149,9 +143,27 @@ with config_col2:
 
 with config_col3:
     per_page_options = [100, 200, 500, 1000, 2000, "All"]
-    per_page = st.selectbox("Channels Per Page", options=per_page_options, index=0)
+    per_page = st.selectbox("Render Nodes Per Page", options=per_page_options, index=0)
 
-uploaded_file = st.file_uploader("Load Local EPG File", type=["xml", "gz"])
+# --- Dual-Ingestion Gateway ---
+epg_url_query = st.query_params.get("epg_url", "")
+col_input1, col_input2 = st.columns(2)
+with col_input1:
+    epg_url = st.text_input("Remote EPG URL (Cross-Session Auto-Load)", value=epg_url_query)
+with col_input2:
+    uploaded_file = st.file_uploader("Or Load Local EPG File", type=["xml", "gz"])
+
+if epg_url and epg_url != epg_url_query:
+    st.query_params["epg_url"] = epg_url
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_remote_data(url):
+    try:
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True, timeout=15)
+        response.raise_for_status()
+        return response.content
+    except Exception as e:
+        return None
 
 def parse_xmltv_datetime(dt_str, tz_info):
     try:
@@ -163,18 +175,17 @@ def parse_xmltv_datetime(dt_str, tz_info):
         return None
 
 def get_genre_style_class(category_text):
-    if not category_text:
-        return ""
+    if not category_text: return ""
     cat_lower = category_text.lower()
-    if "sport" in cat_lower or "sports" in cat_lower:
-        return "genre-sport-tint"
-    if "movie" in cat_lower or "film" in cat_lower:
-        return "genre-movie-tint"
+    if "sport" in cat_lower or "sports" in cat_lower: return "genre-sport-tint"
+    if "movie" in cat_lower or "film" in cat_lower: return "genre-movie-tint"
     return ""
 
-def process_epg_stream(file_obj, max_future_hours, tz_info):
+@st.cache_data(ttl=3600, show_spinner="Parsing EPG Matrix...")
+def process_epg_stream(file_bytes, is_gz, max_future_hours, tz_info):
     now_local = datetime.now(timezone.utc).astimezone(tz_info)
-    context_stream = gzip.open(file_obj, 'rb') if file_obj.name.endswith('.gz') else file_obj
+    file_obj = io.BytesIO(file_bytes)
+    context_stream = gzip.open(file_obj, 'rb') if is_gz else file_obj
 
     channels, groups, programmes = {}, set(), {}
     context = ET.iterparse(context_stream, events=('end',))
@@ -183,10 +194,24 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
         if elem.tag == 'channel':
             ch_id = elem.get('id')
             display_name = elem.find('display-name').text if elem.find('display-name') is not None else ch_id
-            group_tag = elem.find('group')
-            group_name = group_tag.text if group_tag is not None else None
+            
             icon_tag = elem.find('icon')
             logo_url = icon_tag.get('src') if icon_tag is not None else None
+            
+            # --- Heuristic Group Fallback Matrix ---
+            group_name = None
+            group_tag = elem.find('group')
+            if group_tag is not None and group_tag.text:
+                group_name = group_tag.text.strip()
+                
+            if not group_name:
+                cid_match = re.search(r'\.([a-zA-Z]{2})$', ch_id)
+                if cid_match:
+                    group_name = cid_match.group(1).upper()
+                elif logo_url:
+                    logo_match = re.search(r'\.([a-zA-Z]{2})\.(?:png|jpg|jpeg|svg|webp)(?:\?.*)?$', logo_url, re.IGNORECASE)
+                    if logo_match:
+                        group_name = logo_match.group(1).upper()
             
             channels[ch_id] = {"name": display_name, "group": group_name, "logo": logo_url}
             if group_name: groups.add(group_name)
@@ -218,54 +243,103 @@ def process_epg_stream(file_obj, max_future_hours, tz_info):
                     })
             elem.clear()
 
-    if file_obj.name.endswith('.gz'): context_stream.close()
-    for cid in programmes: programmes[cid] = sorted(programmes[cid], key=lambda x: x['start'])
     return sorted(list(groups)), channels, programmes
 
+# Resolve active target file stream
+active_data = None
+is_gzipped = False
 if uploaded_file is not None:
-    available_groups, channel_map, epg_data = process_epg_stream(uploaded_file, lookahead_hours, target_tz)
+    active_data = uploaded_file.getvalue()
+    is_gzipped = uploaded_file.name.endswith('.gz')
+elif epg_url:
+    fetched = fetch_remote_data(epg_url)
+    if fetched:
+        active_data = fetched
+        is_gzipped = epg_url.endswith('.gz')
+    else:
+        st.error("Target Remote URL unresolvable or HTTP timeout exceeded.")
+
+if active_data is not None:
+    available_groups, channel_map, epg_data = process_epg_stream(active_data, is_gzipped, lookahead_hours, target_tz)
     
     with st.form(key="search_form"):
+        st.markdown("### Search & Filter Routing")
+        search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions"], horizontal=True)
+        
         filter_col1, filter_col2 = st.columns([2, 1])
         with filter_col1:
-            search_query = st.text_input("🔍 Search Channel Name or Program Title", "").strip().lower()
+            search_query = st.text_input("Query String", "").strip().lower()
         with filter_col2:
-            selected_group = st.selectbox("Category Group Filter", options=["All Groups"] + available_groups)
-        st.form_submit_button("Search")
+            selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
+        st.form_submit_button("Execute Filter Matrix")
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
-    filtered_channels = []
+    
+    # --- Multi-Card Array Generation Matrix ---
+    render_nodes = []
+    
     for cid, cinfo in channel_map.items():
-        if selected_group != "All Groups" and cinfo['group'] != selected_group: continue
-        if not search_query or search_query in cinfo['name'].lower() or any(search_query in p['title'].lower() for p in epg_data.get(cid, [])):
-            filtered_channels.append(cid)
+        if selected_group != "All Groups" and cinfo['group'] != selected_group: 
+            continue
             
-    if not filtered_channels:
-        st.warning("No matching channels found.")
+        has_match = False
+        
+        if not search_query:
+            render_nodes.append({'cid': cid, 'type': 'Standard', 'prog': None})
+            continue
+
+        if search_query in cinfo['name'].lower():
+            if search_vector in ["All", "Channels"]:
+                render_nodes.append({'cid': cid, 'type': 'Channel Match', 'prog': None})
+                has_match = True
+                
+        if search_vector in ["All", "Programs", "Descriptions"]:
+            for p in epg_data.get(cid, []):
+                t_match = search_query in p['title'].lower()
+                d_match = search_query in p['desc'].lower()
+                
+                if t_match and search_vector in ["All", "Programs"]:
+                    render_nodes.append({'cid': cid, 'type': 'Program Match', 'prog': p})
+                    has_match = True
+                
+                if d_match and search_vector in ["All", "Descriptions"]:
+                    if not (search_vector == "All" and t_match):
+                        render_nodes.append({'cid': cid, 'type': 'Desc Match', 'prog': p})
+                        has_match = True
+
+    if not render_nodes:
+        st.warning("No active nodes fulfill strict search criteria.")
     else:
-        total_channels = len(filtered_channels)
+        total_nodes = len(render_nodes)
         if per_page == "All":
-            page_channels = filtered_channels
+            page_nodes = render_nodes
         else:
             per_page = int(per_page)
-            chunks = (total_channels + per_page - 1) // per_page
+            chunks = (total_nodes + per_page - 1) // per_page
             current_page = st.number_input(f"Page (1 of {chunks})", min_value=1, max_value=chunks, value=1)
-            page_channels = filtered_channels[(current_page - 1) * per_page: min(((current_page - 1) * per_page) + per_page, total_channels)]
+            page_nodes = render_nodes[(current_page - 1) * per_page: min(((current_page - 1) * per_page) + per_page, total_nodes)]
 
-        if "active_channel_id" not in st.session_state and page_channels:
-            st.session_state.active_channel_id = page_channels[0]
+        if "active_channel_id" not in st.session_state and page_nodes:
+            st.session_state.active_channel_id = page_nodes[0]['cid']
 
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
         with left_pane:
-            st.markdown("### 🗺️ Channel Directory")
+            st.markdown("### 🗺️ Target Directory")
             
-            for cid in page_channels:
-                schedule = epg_data.get(cid, [])
+            for node in page_nodes:
+                cid = node['cid']
                 cinfo = channel_map[cid]
-                current_prog = next((p for p in schedule if p['is_current']), None)
-                group_badge = f" • {cinfo['group']}" if cinfo['group'] else ""
+                target_prog = node['prog']
+                match_type = node['type']
                 
+                if target_prog is None:
+                    schedule = epg_data.get(cid, [])
+                    display_prog = next((p for p in schedule if p['is_current']), None)
+                else:
+                    display_prog = target_prog
+                    
+                group_badge = f" • {cinfo['group']}" if cinfo['group'] else ""
                 is_active = (cid == st.session_state.active_channel_id)
                 
                 with st.container(border=True):
@@ -279,49 +353,45 @@ if uploaded_file is not None:
                             
                     with card_text_col:
                         st.html(f'<p class="dir-ch-title">{cinfo["name"]}</p>')
+                        if match_type != "Standard":
+                            st.html(f'<span class="match-badge">🔍 {match_type}</span>')
                         if group_badge:
                             st.caption(group_badge)
                             
-                    if current_prog:
-                        remaining_mins = int((current_prog['stop'] - now_runtime).total_seconds() // 60)
-                        genre_label = f" [{current_prog['genre']}]" if current_prog['genre'] else ""
-                        g_class = get_genre_style_class(current_prog['genre'])
+                    if display_prog:
+                        time_prefix = "Now Playing" if display_prog.get('is_current') else f"Upcoming ({display_prog['start'].strftime('%H:%M')})"
+                        remaining_mins = int((display_prog['stop'] - now_runtime).total_seconds() // 60) if display_prog.get('is_current') else int((display_prog['stop'] - display_prog['start']).total_seconds() // 60)
+                        genre_label = f" [{display_prog['genre']}]" if display_prog['genre'] else ""
+                        g_class = get_genre_style_class(display_prog['genre'])
                         
-                        # Re-instating left-pane colorization logic via st.html 
                         st.html(f"""
                         <div class="schedule-detail-card {g_class}" style="padding: 10px; margin-bottom: 10px;">
-                            <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 2px;">Now Playing: {current_prog['title']}</div>
-                            <div style="font-size: 0.75rem; opacity: 0.8;">⏱️ {remaining_mins} minutes remaining{genre_label}</div>
+                            <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 2px;">{time_prefix}: {display_prog['title']}</div>
+                            <div style="font-size: 0.75rem; opacity: 0.8;">⏱️ {remaining_mins} min span{genre_label}</div>
                         </div>
                         """)
                     else:
                         st.caption("ℹ️ No scheduling metadata captured for this window.")
                     
-                    btn_label = "🟢 Currently Viewing Channel" if is_active else "⚡ Tap to View Detailed Guide"
-                    if st.button(btn_label, key=f"select_ch_{cid}", use_container_width=True, type="primary" if is_active else "secondary"):
+                    btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
+                    btn_label = "🟢 Active Target View" if is_active else "⚡ Open Main Schedule"
+                    if st.button(btn_label, key=f"select_{cid}_{match_type}_{btn_key_suffix}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.active_channel_id = cid
                         st.rerun()
 
         with right_pane:
             active_cid = st.session_state.active_channel_id
-            if active_cid not in page_channels and page_channels:
-                active_cid = page_channels[0]
-                st.session_state.active_channel_id = active_cid
-                
+            
             if active_cid and active_cid in channel_map:
                 active_schedule = epg_data.get(active_cid, [])
                 cinfo = channel_map[active_cid]
                 
-                # Executing flexbox layout explicitly through st.html to evade Markdown DOM tampering
                 if cinfo.get("logo"):
                     logo_segment = f'<img src="{cinfo["logo"]}" class="right-header-logo-img" />'
                 else:
                     logo_segment = '<span style="font-size: 2.2rem;">📺</span>'
                     
-                if cinfo.get('group'):
-                    group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Category Group: <b>{cinfo["group"]}</b></span>'
-                else:
-                    group_segment = ''
+                group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Heuristic Index: <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
                 
                 st.html(f"""
                 <div class="right-header-container">
@@ -341,7 +411,7 @@ if uploaded_file is not None:
                 future_progs = [p for p in active_schedule if not p['is_current'] and p['start'] > now_runtime]
                 
                 if current_prog:
-                    st.markdown("### 🟢 Now Playing")
+                    st.markdown("### 🟢 Active Broadcast")
                     g_class = get_genre_style_class(current_prog['genre'])
                     genre_header = f" | {current_prog['genre']}" if current_prog['genre'] else ""
                     
@@ -353,7 +423,7 @@ if uploaded_file is not None:
                     """)
                 
                 if future_progs:
-                    st.markdown("### ⏭️ Up Next")
+                    st.markdown("### ⏭️ Pipeline Schedule")
                     for prog in future_progs:
                         g_class = get_genre_style_class(prog['genre'])
                         genre_header = f" | {prog['genre']}" if prog['genre'] else ""
@@ -365,4 +435,4 @@ if uploaded_file is not None:
                         </div>
                         """)
                 elif not current_prog and not future_progs:
-                    st.info("No active data timelines mapped for this tracking block.")
+                    st.info("No timeline data loaded for this entity.")
