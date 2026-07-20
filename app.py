@@ -31,7 +31,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-st.title("📺 Easy EPG")
+st.title("Easy EPG - A simple EPG Viewer by GoonerB")
 
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
@@ -269,8 +269,8 @@ if active_data is not None:
     available_groups, channel_map, epg_data = process_epg_stream(active_data, is_gzipped, lookahead_hours, target_tz)
     
     with st.form(key="search_form"):
-        st.markdown("### Search & Filter Routing")
-        search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions"], horizontal=True)
+        st.markdown("### Search & Filter")
+        search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions", "Genre"], horizontal=True)
         
         filter_col1, filter_col2 = st.columns([2, 1])
         with filter_col1:
@@ -296,10 +296,11 @@ if active_data is not None:
             if search_vector in ["All", "Channels"]:
                 render_nodes.append({'cid': cid, 'type': 'Channel Match', 'prog': None})
                 
-        if search_vector in ["All", "Programs", "Descriptions"]:
+        if search_vector in ["All", "Programs", "Descriptions", "Genre"]:
             for p in epg_data.get(cid, []):
                 t_match = search_query in p['title'].lower()
                 d_match = search_query in p['desc'].lower()
+                g_match = p['genre'] is not None and search_query in p['genre'].lower()
                 
                 if t_match and search_vector in ["All", "Programs"]:
                     render_nodes.append({'cid': cid, 'type': 'Program Match', 'prog': p})
@@ -307,6 +308,10 @@ if active_data is not None:
                 if d_match and search_vector in ["All", "Descriptions"]:
                     if not (search_vector == "All" and t_match):
                         render_nodes.append({'cid': cid, 'type': 'Desc Match', 'prog': p})
+
+                if g_match and search_vector in ["All", "Genre"]:
+                    if not (search_vector == "All" and (t_match or d_match)):
+                        render_nodes.append({'cid': cid, 'type': 'Genre Match', 'prog': p})
 
     if not render_nodes:
         st.warning("No active nodes fulfill strict search criteria.")
@@ -326,7 +331,7 @@ if active_data is not None:
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
         with left_pane:
-            st.markdown("### 🗺️ Target Directory")
+            st.markdown("### Channel Directory")
             
             for node in page_nodes:
                 cid = node['cid']
@@ -375,7 +380,7 @@ if active_data is not None:
                         st.caption("ℹ️ No scheduling metadata captured for this window.")
                     
                     btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
-                    btn_label = "🟢 Active Target View" if is_active else "⚡ Open Main Schedule"
+                    btn_label = "🟢 Channel Selected" if is_active else "Open Channel Schedule"
                     if st.button(btn_label, key=f"select_{cid}_{match_type}_{btn_key_suffix}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.active_channel_id = cid
                         st.rerun()
@@ -412,7 +417,7 @@ if active_data is not None:
                 future_progs = [p for p in active_schedule if not p['is_current'] and p['start'] > now_runtime]
                 
                 if current_prog:
-                    st.markdown("### 🟢 Active Broadcast")
+                    st.markdown("### 🟢 Now Playing")
                     g_class = get_genre_style_class(current_prog['genre'])
                     genre_header = f" | {current_prog['genre']}" if current_prog['genre'] else ""
                     
@@ -424,7 +429,7 @@ if active_data is not None:
                     """)
                 
                 if future_progs:
-                    st.markdown("### ⏭️ Pipeline Schedule")
+                    st.markdown("### ⏭️ Upcoming Programs")
                     for prog in future_progs:
                         g_class = get_genre_style_class(prog['genre'])
                         genre_header = f" | {prog['genre']}" if prog['genre'] else ""
