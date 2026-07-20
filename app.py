@@ -277,7 +277,7 @@ if active_data is not None:
             search_query = st.text_input("Query String", "").strip().lower()
         with filter_col2:
             selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
-        st.form_submit_button("Search")
+        st.form_submit_button("Execute Filter Matrix")
     
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
@@ -366,14 +366,27 @@ if active_data is not None:
                             
                     if display_prog:
                         time_prefix = "Now Playing" if display_prog.get('is_current') else f"Upcoming ({display_prog['start'].strftime('%H:%M')})"
-                        remaining_mins = int((display_prog['stop'] - now_runtime).total_seconds() // 60) if display_prog.get('is_current') else int((display_prog['stop'] - display_prog['start']).total_seconds() // 60)
+                        
+                        # --- Standardized UTC Delta Calculation ---
+                        stop_utc = display_prog['stop'].astimezone(timezone.utc)
+                        start_utc = display_prog['start'].astimezone(timezone.utc)
+                        now_utc = datetime.now(timezone.utc)
+                        
+                        if display_prog.get('is_current'):
+                            remaining_sec = (stop_utc - now_utc).total_seconds()
+                            remaining_mins = max(0, int(remaining_sec // 60))
+                            span_label = f"⏱️ {remaining_mins} min left"
+                        else:
+                            total_mins = int((stop_utc - start_utc).total_seconds() // 60)
+                            span_label = f"⏱️ {total_mins} min span"
+                            
                         genre_label = f" [{display_prog['genre']}]" if display_prog['genre'] else ""
                         g_class = get_genre_style_class(display_prog['genre'])
                         
                         st.html(f"""
                         <div class="schedule-detail-card {g_class}" style="padding: 10px; margin-bottom: 10px;">
                             <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 2px;">{time_prefix}: {display_prog['title']}</div>
-                            <div style="font-size: 0.75rem; opacity: 0.8;">⏱️ {remaining_mins} min span{genre_label}</div>
+                            <div style="font-size: 0.75rem; opacity: 0.8;">{span_label}{genre_label}</div>
                         </div>
                         """)
                     else:
