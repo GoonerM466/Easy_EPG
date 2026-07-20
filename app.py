@@ -148,21 +148,26 @@ with config_col3:
 # --- Dual-Ingestion Gateway ---
 epg_url_query = st.query_params.get("epg_url", "")
 col_input1, col_input2 = st.columns(2)
+
 with col_input1:
-    epg_url = st.text_input("Remote EPG URL (Cross-Session Auto-Load)", value=epg_url_query)
+    with st.form(key="url_form"):
+        epg_url_input = st.text_input("Remote EPG URL (Cross-Session Auto-Load)", value=epg_url_query)
+        submit_url = st.form_submit_button("Load Remote EPG")
+        
+        if submit_url and epg_url_input:
+            st.query_params["epg_url"] = epg_url_input
+            epg_url_query = epg_url_input
+
 with col_input2:
     uploaded_file = st.file_uploader("Or Load Local EPG File", type=["xml", "gz"])
-
-if epg_url and epg_url != epg_url_query:
-    st.query_params["epg_url"] = epg_url
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_remote_data(url):
     try:
-        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True, timeout=15)
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True, timeout=20)
         response.raise_for_status()
         return response.content
-    except Exception as e:
+    except Exception:
         return None
 
 def parse_xmltv_datetime(dt_str, tz_info):
@@ -245,17 +250,18 @@ def process_epg_stream(file_bytes, is_gz, max_future_hours, tz_info):
 
     return sorted(list(groups)), channels, programmes
 
-# Resolve active target file stream
+# --- Active Target Data Stream Resolution ---
 active_data = None
 is_gzipped = False
+
 if uploaded_file is not None:
     active_data = uploaded_file.getvalue()
-    is_gzipped = uploaded_file.name.endswith('.gz')
-elif epg_url:
-    fetched = fetch_remote_data(epg_url)
+    is_gzipped = active_data.startswith(b'\x1f\x8b')
+elif epg_url_query:
+    fetched = fetch_remote_data(epg_url_query)
     if fetched:
         active_data = fetched
-        is_gzipped = epg_url.endswith('.gz')
+        is_gzipped = active_data.startswith(b'\x1f\x8b')
     else:
         st.error("Target Remote URL unresolvable or HTTP timeout exceeded.")
 
@@ -282,8 +288,6 @@ if active_data is not None:
         if selected_group != "All Groups" and cinfo['group'] != selected_group: 
             continue
             
-        has_match = False
-        
         if not search_query:
             render_nodes.append({'cid': cid, 'type': 'Standard', 'prog': None})
             continue
@@ -291,7 +295,6 @@ if active_data is not None:
         if search_query in cinfo['name'].lower():
             if search_vector in ["All", "Channels"]:
                 render_nodes.append({'cid': cid, 'type': 'Channel Match', 'prog': None})
-                has_match = True
                 
         if search_vector in ["All", "Programs", "Descriptions"]:
             for p in epg_data.get(cid, []):
@@ -300,12 +303,10 @@ if active_data is not None:
                 
                 if t_match and search_vector in ["All", "Programs"]:
                     render_nodes.append({'cid': cid, 'type': 'Program Match', 'prog': p})
-                    has_match = True
                 
                 if d_match and search_vector in ["All", "Descriptions"]:
                     if not (search_vector == "All" and t_match):
                         render_nodes.append({'cid': cid, 'type': 'Desc Match', 'prog': p})
-                        has_match = True
 
     if not render_nodes:
         st.warning("No active nodes fulfill strict search criteria.")
@@ -374,7 +375,7 @@ if active_data is not None:
                         st.caption("ℹ️ No scheduling metadata captured for this window.")
                     
                     btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
-                    btn_label = "🟢 Channel Selected" if is_active else "⚡ Open Main Schedule"
+                    btn_label = "🟢 Active Target View" if is_active else "⚡ Open Main Schedule"
                     if st.button(btn_label, key=f"select_{cid}_{match_type}_{btn_key_suffix}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.active_channel_id = cid
                         st.rerun()
@@ -411,7 +412,7 @@ if active_data is not None:
                 future_progs = [p for p in active_schedule if not p['is_current'] and p['start'] > now_runtime]
                 
                 if current_prog:
-                    st.markdown("### 🟢 Now Playing")
+                    st.markdown("### 🟢 Active Broadcast")
                     g_class = get_genre_style_class(current_prog['genre'])
                     genre_header = f" | {current_prog['genre']}" if current_prog['genre'] else ""
                     
@@ -423,7 +424,7 @@ if active_data is not None:
                     """)
                 
                 if future_progs:
-                    st.markdown("### ⏭️ Upcoming Programs")
+                    st.markdown("### ⏭️ Pipeline Schedule")
                     for prog in future_progs:
                         g_class = get_genre_style_class(prog['genre'])
                         genre_header = f" | {prog['genre']}" if prog['genre'] else ""
