@@ -374,7 +374,7 @@ if active_data is not None:
                         st.caption("ℹ️ No scheduling metadata captured for this window.")
                     
                     btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
-                    btn_label = "🟢 Active Target View" if is_active else "⚡ Open Main Schedule"
+                    btn_label = "🟢 Channel Selected" if is_active else "⚡ Open Main Schedule"
                     if st.button(btn_label, key=f"select_{cid}_{match_type}_{btn_key_suffix}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.active_channel_id = cid
                         st.rerun()
@@ -411,7 +411,7 @@ if active_data is not None:
                 future_progs = [p for p in active_schedule if not p['is_current'] and p['start'] > now_runtime]
                 
                 if current_prog:
-                    st.markdown("### 🟢 Active Broadcast")
+                    st.markdown("### 🟢 Now Playing")
                     g_class = get_genre_style_class(current_prog['genre'])
                     genre_header = f" | {current_prog['genre']}" if current_prog['genre'] else ""
                     
@@ -423,7 +423,7 @@ if active_data is not None:
                     """)
                 
                 if future_progs:
-                    st.markdown("### ⏭️ Pipeline Schedule")
+                    st.markdown("### ⏭️ Upcoming Programs")
                     for prog in future_progs:
                         g_class = get_genre_style_class(prog['genre'])
                         genre_header = f" | {prog['genre']}" if prog['genre'] else ""
