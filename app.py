@@ -295,7 +295,7 @@ if active_data is not None:
             search_query = st.text_input("Query String", "").strip().lower()
         with filter_col2:
             selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
-        st.form_submit_button("Execute Filter Matrix")
+        st.form_submit_button("Search...")
     
     # --- Multi-Card Array Generation Matrix ---
     render_nodes = []
