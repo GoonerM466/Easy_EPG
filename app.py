@@ -198,8 +198,7 @@ def get_genre_style_class(category_text):
     return ""
 
 @st.cache_data(ttl=3600, show_spinner="Parsing EPG Matrix...")
-def process_epg_stream(file_bytes, is_gz, max_future_hours, tz_info):
-    now_local = datetime.now(timezone.utc).astimezone(tz_info)
+def process_epg_stream(file_bytes, is_gz, tz_info):
     file_obj = io.BytesIO(file_bytes)
     context_stream = gzip.open(file_obj, 'rb') if is_gz else file_obj
 
@@ -214,7 +213,6 @@ def process_epg_stream(file_bytes, is_gz, max_future_hours, tz_info):
             icon_tag = elem.find('icon')
             logo_url = icon_tag.get('src') if icon_tag is not None else None
             
-            # --- Heuristic Group Fallback Matrix ---
             group_name = None
             group_tag = elem.find('group')
             if group_tag is not None and group_tag.text:
@@ -240,23 +238,15 @@ def process_epg_stream(file_bytes, is_gz, max_future_hours, tz_info):
             stop_dt = parse_xmltv_datetime(elem.get('stop', ''), tz_info)
             
             if start_dt and stop_dt:
-                is_current = (start_dt <= now_local < stop_dt)
-                is_upcoming = (now_local <= start_dt)
+                title = elem.find('title').text if elem.find('title') is not None else "No Title"
+                desc = elem.find('desc').text if elem.find('desc') is not None else ""
+                categories = [cat.text for cat in elem.findall('category') if cat.text]
+                category_text = " / ".join(categories) if categories else None
                 
-                if is_current or is_upcoming:
-                    if is_upcoming and (max_future_hours == 0 or (start_dt - now_local).total_seconds() / 3600.0 > max_future_hours):
-                        elem.clear()
-                        continue
-                    
-                    title = elem.find('title').text if elem.find('title') is not None else "No Title"
-                    desc = elem.find('desc').text if elem.find('desc') is not None else ""
-                    categories = [cat.text for cat in elem.findall('category') if cat.text]
-                    category_text = " / ".join(categories) if categories else None
-                    
-                    programmes.setdefault(ch_id, []).append({
-                        "start": start_dt, "stop": stop_dt, "title": title,
-                        "desc": desc, "genre": category_text, "is_current": is_current
-                    })
+                programmes.setdefault(ch_id, []).append({
+                    "start": start_dt, "stop": stop_dt, "title": title,
+                    "desc": desc, "genre": category_text
+                })
             elem.clear()
 
     return sorted(list(groups)), channels, programmes
@@ -277,8 +267,25 @@ elif epg_url_query:
         st.error("Target Remote URL unresolvable or HTTP timeout exceeded.")
 
 if active_data is not None:
-    available_groups, channel_map, epg_data = process_epg_stream(active_data, is_gzipped, lookahead_hours, target_tz)
+    available_groups, channel_map, epg_raw = process_epg_stream(active_data, is_gzipped, target_tz)
+    now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
+    # --- Dynamic Time Window Filter Pass ---
+    epg_data = {}
+    for cid, progs in epg_raw.items():
+        filtered_progs = []
+        for p in progs:
+            is_current = (p['start'] <= now_runtime < p['stop'])
+            is_upcoming = (now_runtime <= p['start'])
+            
+            if is_current or is_upcoming:
+                if is_upcoming and (lookahead_hours > 0) and ((p['start'] - now_runtime).total_seconds() / 3600.0 > lookahead_hours):
+                    continue
+                p_copy = dict(p)
+                p_copy['is_current'] = is_current
+                filtered_progs.append(p_copy)
+        epg_data[cid] = filtered_progs
+
     with st.form(key="search_form"):
         st.markdown("### Search & Filter")
         search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions", "Genre"], horizontal=True)
@@ -289,8 +296,6 @@ if active_data is not None:
         with filter_col2:
             selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
         st.form_submit_button("Execute Filter Matrix")
-    
-    now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
     # --- Multi-Card Array Generation Matrix ---
     render_nodes = []
