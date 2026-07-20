@@ -172,10 +172,21 @@ def fetch_remote_data(url):
 
 def parse_xmltv_datetime(dt_str, tz_info):
     try:
-        parts = dt_str.split()
-        base_dt = datetime.strptime(parts[0][:14], "%Y%m%d%H%M%S")
-        base_dt = base_dt.replace(tzinfo=timezone.utc)
-        return base_dt.astimezone(tz_info)
+        parts = dt_str.strip().split()
+        time_part = parts[0][:14]
+        dt = datetime.strptime(time_part, "%Y%m%d%H%M%S")
+        
+        if len(parts) > 1 and len(parts[1]) == 5:
+            offset_str = parts[1]
+            hours = int(offset_str[1:3])
+            minutes = int(offset_str[3:5])
+            sign = -1 if offset_str[0] == '-' else 1
+            src_tz = timezone(sign * timedelta(hours=hours, minutes=minutes))
+            dt = dt.replace(tzinfo=src_tz)
+        else:
+            dt = dt.replace(tzinfo=tz_info)
+            
+        return dt.astimezone(tz_info)
     except (ValueError, IndexError):
         return None
 
@@ -367,17 +378,12 @@ if active_data is not None:
                     if display_prog:
                         time_prefix = "Now Playing" if display_prog.get('is_current') else f"Upcoming ({display_prog['start'].strftime('%H:%M')})"
                         
-                        # --- Standardized UTC Delta Calculation ---
-                        stop_utc = display_prog['stop'].astimezone(timezone.utc)
-                        start_utc = display_prog['start'].astimezone(timezone.utc)
-                        now_utc = datetime.now(timezone.utc)
-                        
                         if display_prog.get('is_current'):
-                            remaining_sec = (stop_utc - now_utc).total_seconds()
+                            remaining_sec = (display_prog['stop'] - now_runtime).total_seconds()
                             remaining_mins = max(0, int(remaining_sec // 60))
                             span_label = f"⏱️ {remaining_mins} min left"
                         else:
-                            total_mins = int((stop_utc - start_utc).total_seconds() // 60)
+                            total_mins = int((display_prog['stop'] - display_prog['start']).total_seconds() // 60)
                             span_label = f"⏱️ {total_mins} min span"
                             
                         genre_label = f" [{display_prog['genre']}]" if display_prog['genre'] else ""
