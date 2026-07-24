@@ -36,10 +36,10 @@ st.title("Easy EPG - A simple EPG Viewer by GoonerB")
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
-    /* Suppress virtual keyboard invocation on mobile for select components */
-    [data-testid="stSelectbox"] input {
+    /* Suppress virtual keyboard invocation on mobile for dynamic baseweb components */
+    div[data-baseweb="select"] input {
+        display: none !important;
         pointer-events: none !important;
-        caret-color: transparent !important;
     }
 
     /* Global scroll dampening for containers & touch-event propagation */
@@ -263,7 +263,7 @@ def process_epg_stream(file_bytes, is_gz, tz_info):
                     parts = [p.strip() for p in rc.split('/')]
                     for p in parts:
                         if p:
-                            clean_categories.append(p)
+                            clean_categories.append(p.title())
                             
                 category_text = " / ".join(clean_categories) if clean_categories else None
                 
@@ -333,14 +333,13 @@ if active_data is not None:
     
     # --- Matrix Evaluation Loop ---
     render_nodes = []
+    is_active_genre = (selected_genre != "All Genres")
+    is_active_search = bool(search_query)
     
     for cid, cinfo in channel_map.items():
         if selected_group != "All Groups" and cinfo['group'] != selected_group: 
             continue
             
-        is_active_genre = (selected_genre != "All Genres")
-        is_active_search = bool(search_query)
-        
         if not is_active_search and not is_active_genre:
             render_nodes.append({'cid': cid, 'type': 'Standard', 'prog': None})
             continue
@@ -389,20 +388,15 @@ if active_data is not None:
                 final_type = " | ".join(dict.fromkeys(match_labels)) if match_labels else "Filtered"
                 render_nodes.append({'cid': cid, 'type': final_type, 'prog': p})
 
-    # --- Chronological Time-Vector Sort ---
-    def get_sort_datetime(node):
-        if node['prog']:
-            return node['prog']['start']
-        
-        schedule = epg_data.get(node['cid'], [])
-        current_prog = next((p for p in schedule if p['is_current']), None)
-        if current_prog:
-            return current_prog['start']
-        elif schedule:
-            return schedule[0]['start']
-        return datetime.max.replace(tzinfo=timezone.utc)
-        
-    render_nodes.sort(key=get_sort_datetime)
+    # --- Matrix Sequence Sorting Algorithms ---
+    if is_active_search or is_active_genre:
+        def get_sort_datetime(node):
+            if node['prog']:
+                return node['prog']['start']
+            return datetime.max.replace(tzinfo=timezone.utc)
+        render_nodes.sort(key=get_sort_datetime)
+    else:
+        render_nodes.sort(key=lambda node: channel_map[node['cid']]['name'])
 
     if not render_nodes:
         st.warning("No active nodes fulfill strict matrix criteria.")
