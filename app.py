@@ -212,7 +212,7 @@ def process_epg_stream(file_bytes, is_gz, tz_info):
     file_obj = io.BytesIO(file_bytes)
     context_stream = gzip.open(file_obj, 'rb') if is_gz else file_obj
 
-    channels, groups, all_genres_set, programmes = {}, set(), set(), {}
+    channels, groups, all_genres_map, programmes = {}, set(), {}, {}
     context = ET.iterparse(context_stream, events=('end',))
     
     for event, elem in context:
@@ -253,22 +253,29 @@ def process_epg_stream(file_bytes, is_gz, tz_info):
                 
                 raw_categories = [cat.text for cat in elem.findall('category') if cat.text]
                 clean_categories = []
+                lower_categories = []
                 for rc in raw_categories:
                     parts = [p.strip() for p in rc.split('/')]
                     for p in parts:
                         if p:
                             clean_categories.append(p)
-                            all_genres_set.add(p)
+                            l_val = p.lower()
+                            lower_categories.append(l_val)
+                            if l_val not in all_genres_map:
+                                all_genres_map[l_val] = p
                             
                 category_text = " / ".join(clean_categories) if clean_categories else None
                 
                 programmes.setdefault(ch_id, []).append({
                     "start": start_dt, "stop": stop_dt, "title": title,
-                    "desc": desc, "genre": category_text, "genre_list": clean_categories
+                    "desc": desc, "genre": category_text, "genre_list": lower_categories
                 })
             elem.clear()
 
-    return sorted(list(groups)), sorted(list(all_genres_set), key=str.lower), channels, programmes
+    sorted_genre_keys = sorted(all_genres_map.keys())
+    formatted_genres = [all_genres_map[k] for k in sorted_genre_keys]
+
+    return sorted(list(groups)), formatted_genres, channels, programmes
 
 # --- Active Target Data Stream Resolution ---
 active_data = None
@@ -326,6 +333,7 @@ if active_data is not None:
             continue
             
         is_active_genre = (selected_genre != "All Genres")
+        target_genre_lower = selected_genre.lower() if is_active_genre else ""
         is_active_search = bool(search_query)
         
         if not is_active_search and not is_active_genre:
@@ -342,7 +350,7 @@ if active_data is not None:
             match_labels = []
             
             if is_active_genre:
-                if selected_genre not in p.get('genre_list', []):
+                if target_genre_lower not in p.get('genre_list', []):
                     genre_pass = False
                 else:
                     match_labels.append("Genre Match")
