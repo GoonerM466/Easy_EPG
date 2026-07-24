@@ -125,49 +125,51 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Configuration Controls ---
-config_col1, config_col2, config_col3 = st.columns(3)
+with st.expander("⚙️ Settings", expanded=False):
+    config_col1, config_col2, config_col3 = st.columns(3)
 
-with config_col1:
-    tz_options = {
-        "UTC / GMT": 0,
-        "EST / EDT (UTC-5 / UTC-4)": -4,
-        "CST / CDT (UTC-6 / UTC-5)": -5,
-        "MST / MDT (UTC-7 / UTC-6)": -6,
-        "PST / PDT (UTC-8 / UTC-7)": -7,
-        "UK / BST (UTC+0 / UTC+1)": 1,
-        "CET / CEST (UTC+1 / UTC+2)": 2
-    }
-    selected_tz_offset = st.selectbox("Local Timezone Offset", options=list(tz_options.keys()), index=1)
-    tz_hours = tz_options[selected_tz_offset]
-    target_tz = timezone(timedelta(hours=tz_hours))
+    with config_col1:
+        tz_options = {
+            "UTC / GMT": 0,
+            "EST / EDT (UTC-5 / UTC-4)": -4,
+            "CST / CDT (UTC-6 / UTC-5)": -5,
+            "MST / MDT (UTC-7 / UTC-6)": -6,
+            "PST / PDT (UTC-8 / UTC-7)": -7,
+            "UK / BST (UTC+0 / UTC+1)": 1,
+            "CET / CEST (UTC+1 / UTC+2)": 2
+        }
+        selected_tz_offset = st.selectbox("Local Timezone Offset", options=list(tz_options.keys()), index=1)
+        tz_hours = tz_options[selected_tz_offset]
+        target_tz = timezone(timedelta(hours=tz_hours))
 
-with config_col2:
-    lookahead_hours = st.selectbox(
-        "Future Programming Window",
-        options=[0, 2, 4, 6, 8],
-        index=1,
-        format_func=lambda x: "Always Current Program Only" if x == 0 else f"Current + {x} Hours"
-    )
+    with config_col2:
+        lookahead_hours = st.selectbox(
+            "Future Programming Window",
+            options=[0, 2, 4, 6, 8],
+            index=1,
+            format_func=lambda x: "Always Current Program Only" if x == 0 else f"Current + {x} Hours"
+        )
 
-with config_col3:
-    per_page_options = [100, 200, 500, 1000, 2000, "All"]
-    per_page = st.selectbox("Render Nodes Per Page", options=per_page_options, index=0)
+    with config_col3:
+        per_page_options = [100, 200, 500, 1000, 2000, "All"]
+        per_page = st.selectbox("Render Nodes Per Page", options=per_page_options, index=0)
 
 # --- Dual-Ingestion Gateway ---
-epg_url_query = st.query_params.get("epg_url", "")
-col_input1, col_input2 = st.columns(2)
+with st.expander("📡 Source Configuration", expanded=False):
+    epg_url_query = st.query_params.get("epg_url", "")
+    col_input1, col_input2 = st.columns(2)
 
-with col_input1:
-    with st.form(key="url_form"):
-        epg_url_input = st.text_input("Remote EPG URL (Cross-Session Auto-Load)", value=epg_url_query)
-        submit_url = st.form_submit_button("Load Remote EPG")
-        
-        if submit_url and epg_url_input:
-            st.query_params["epg_url"] = epg_url_input
-            epg_url_query = epg_url_input
+    with col_input1:
+        with st.form(key="url_form"):
+            epg_url_input = st.text_input("Remote EPG URL (Cross-Session Auto-Load)", value=epg_url_query)
+            submit_url = st.form_submit_button("Load Remote EPG")
+            
+            if submit_url and epg_url_input:
+                st.query_params["epg_url"] = epg_url_input
+                epg_url_query = epg_url_input
 
-with col_input2:
-    uploaded_file = st.file_uploader("Or Load Local EPG File", type=["xml", "gz"])
+    with col_input2:
+        uploaded_file = st.file_uploader("Or Load Local EPG File", type=["xml", "gz"])
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_remote_data(url):
@@ -294,16 +296,14 @@ if active_data is not None:
                 filtered_progs.append(p_copy)
         epg_data[cid] = filtered_progs
 
-    with st.form(key="search_form"):
-        st.markdown("### Search & Filter")
-        search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions", "Genre"], horizontal=True)
-        
-        filter_col1, filter_col2 = st.columns([2, 1])
-        with filter_col1:
+    # --- Persistent Rendering Nodes ---
+    selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
+
+    with st.expander("🔍 Search & Filter", expanded=False):
+        with st.form(key="search_form"):
+            search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions", "Genre"], horizontal=True)
             search_query = st.text_input("Query String", "").strip().lower()
-        with filter_col2:
-            selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
-        st.form_submit_button("Search...")
+            st.form_submit_button("Execute Search")
     
     # --- Multi-Card Array Generation Matrix ---
     render_nodes = []
