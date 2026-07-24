@@ -400,7 +400,7 @@ if active_data is not None:
     render_nodes.sort(key=get_sort_datetime)
 
     if not render_nodes:
-        st.warning("No active nodes fulfill strict matrix criteria.")
+        st.warning("No content found using defined search terms.")
     else:
         total_nodes = len(render_nodes)
         if per_page == "All":
