@@ -36,6 +36,12 @@ st.title("Easy EPG - A simple EPG Viewer by GoonerB")
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
+    /* Suppress virtual keyboard invocation on mobile for select components */
+    [data-testid="stSelectbox"] input {
+        pointer-events: none !important;
+        caret-color: transparent !important;
+    }
+
     /* Global scroll dampening for containers & touch-event propagation */
     [data-testid="stVerticalBlockBorderWrapper"] {
         overflow: hidden !important;
@@ -207,12 +213,12 @@ def get_genre_style_class(category_text):
     if "movie" in cat_lower or "film" in cat_lower: return "genre-movie-tint"
     return ""
 
-@st.cache_data(ttl=3600, show_spinner="Parsing EPG Matrix & Taxonomic Indices...")
+@st.cache_data(ttl=3600, show_spinner="Parsing EPG Matrix...")
 def process_epg_stream(file_bytes, is_gz, tz_info):
     file_obj = io.BytesIO(file_bytes)
     context_stream = gzip.open(file_obj, 'rb') if is_gz else file_obj
 
-    channels, groups, all_genres_map, programmes = {}, set(), {}, {}
+    channels, groups, programmes = {}, set(), {}
     context = ET.iterparse(context_stream, events=('end',))
     
     for event, elem in context:
@@ -253,29 +259,21 @@ def process_epg_stream(file_bytes, is_gz, tz_info):
                 
                 raw_categories = [cat.text for cat in elem.findall('category') if cat.text]
                 clean_categories = []
-                lower_categories = []
                 for rc in raw_categories:
                     parts = [p.strip() for p in rc.split('/')]
                     for p in parts:
                         if p:
                             clean_categories.append(p)
-                            l_val = p.lower()
-                            lower_categories.append(l_val)
-                            if l_val not in all_genres_map:
-                                all_genres_map[l_val] = p
                             
                 category_text = " / ".join(clean_categories) if clean_categories else None
                 
                 programmes.setdefault(ch_id, []).append({
                     "start": start_dt, "stop": stop_dt, "title": title,
-                    "desc": desc, "genre": category_text, "genre_list": lower_categories
+                    "desc": desc, "genre": category_text, "genre_list": clean_categories
                 })
             elem.clear()
 
-    sorted_genre_keys = sorted(all_genres_map.keys())
-    formatted_genres = [all_genres_map[k] for k in sorted_genre_keys]
-
-    return sorted(list(groups)), formatted_genres, channels, programmes
+    return sorted(list(groups)), channels, programmes
 
 # --- Active Target Data Stream Resolution ---
 active_data = None
@@ -293,11 +291,13 @@ elif epg_url_query:
         st.error("Target Remote URL unresolvable or HTTP timeout exceeded.")
 
 if active_data is not None:
-    available_groups, available_genres, channel_map, epg_raw = process_epg_stream(active_data, is_gzipped, target_tz)
+    available_groups, channel_map, epg_raw = process_epg_stream(active_data, is_gzipped, target_tz)
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
-    # --- Dynamic Time Window Filter Pass ---
+    # --- Dynamic Time Window Filter Pass & Active Taxonomic Extraction ---
     epg_data = {}
+    active_genres_set = set()
+    
     for cid, progs in epg_raw.items():
         filtered_progs = []
         for p in progs:
@@ -310,7 +310,13 @@ if active_data is not None:
                 p_copy = dict(p)
                 p_copy['is_current'] = is_current
                 filtered_progs.append(p_copy)
+                
+                for g in p_copy.get('genre_list', []):
+                    active_genres_set.add(g)
+                    
         epg_data[cid] = filtered_progs
+
+    available_genres = sorted(list(active_genres_set), key=str.lower)
 
     # --- Persistent Rendering Nodes ---
     pers_col1, pers_col2 = st.columns(2)
@@ -333,7 +339,6 @@ if active_data is not None:
             continue
             
         is_active_genre = (selected_genre != "All Genres")
-        target_genre_lower = selected_genre.lower() if is_active_genre else ""
         is_active_search = bool(search_query)
         
         if not is_active_search and not is_active_genre:
@@ -350,7 +355,7 @@ if active_data is not None:
             match_labels = []
             
             if is_active_genre:
-                if target_genre_lower not in p.get('genre_list', []):
+                if selected_genre not in p.get('genre_list', []):
                     genre_pass = False
                 else:
                     match_labels.append("Genre Match")
@@ -400,7 +405,7 @@ if active_data is not None:
     render_nodes.sort(key=get_sort_datetime)
 
     if not render_nodes:
-        st.warning("No content found using defined search terms.")
+        st.warning("No active nodes fulfill strict matrix criteria.")
     else:
         total_nodes = len(render_nodes)
         if per_page == "All":
@@ -417,7 +422,7 @@ if active_data is not None:
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
         with left_pane:
-            st.markdown("### Channel Directory")
+            st.markdown("### Rendering Directory")
             
             for node in page_nodes:
                 cid = node['cid']
