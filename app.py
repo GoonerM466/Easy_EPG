@@ -124,19 +124,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- DOM Hardware Interception Protocol ---
+# --- DOM Hardware Interception & Focus Blur Protocol ---
 st.html("""
 <script>
-    const lockInputs = () => {
+    const enforceNoKeyboard = () => {
         const doc = window.parent ? window.parent.document : document;
         const inputs = doc.querySelectorAll('[data-testid="stSelectbox"] input');
         inputs.forEach(node => {
             node.setAttribute('inputmode', 'none');
             node.setAttribute('readonly', 'true');
+            if (!node.dataset.keyboardLocked) {
+                node.dataset.keyboardLocked = 'true';
+                node.addEventListener('focus', (e) => {
+                    e.target.blur();
+                }, true);
+                node.addEventListener('touchstart', (e) => {
+                    e.target.blur();
+                }, true);
+            }
         });
     };
-    lockInputs();
-    const observer = new MutationObserver(lockInputs);
+    enforceNoKeyboard();
+    const observer = new MutationObserver(enforceNoKeyboard);
     observer.observe(window.parent ? window.parent.document.body : document.body, {childList: true, subtree: true});
 </script>
 """)
@@ -401,14 +410,11 @@ if active_data is not None:
 
     # --- Matrix Sequence Sorting Algorithms ---
     if is_active_search or is_active_genre:
-        # Sort chronologically by program start time ONLY if filtering is actively mutating the matrix
         def get_sort_datetime(node):
             if node['prog']:
                 return node['prog']['start']
             return datetime.max.replace(tzinfo=timezone.utc)
         render_nodes.sort(key=get_sort_datetime)
-    # If no filters are active, the sort logic is bypassed. 
-    # Python dicts natively retain the XML insertion sequence, maintaining true EPG ordering.
 
     if not render_nodes:
         st.warning("No active nodes fulfill strict matrix criteria.")
