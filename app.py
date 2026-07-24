@@ -36,12 +36,6 @@ st.title("Easy EPG - A simple EPG Viewer by GoonerB")
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
-    /* Suppress virtual keyboard invocation on mobile for dynamic baseweb components */
-    div[data-baseweb="select"] input {
-        display: none !important;
-        pointer-events: none !important;
-    }
-
     /* Global scroll dampening for containers & touch-event propagation */
     [data-testid="stVerticalBlockBorderWrapper"] {
         overflow: hidden !important;
@@ -129,6 +123,23 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# --- DOM Hardware Interception Protocol ---
+st.html("""
+<script>
+    const lockInputs = () => {
+        const doc = window.parent ? window.parent.document : document;
+        const inputs = doc.querySelectorAll('[data-testid="stSelectbox"] input');
+        inputs.forEach(node => {
+            node.setAttribute('inputmode', 'none');
+            node.setAttribute('readonly', 'true');
+        });
+    };
+    lockInputs();
+    const observer = new MutationObserver(lockInputs);
+    observer.observe(window.parent ? window.parent.document.body : document.body, {childList: true, subtree: true});
+</script>
+""")
 
 # --- Configuration Controls ---
 with st.expander("⚙️ Settings", expanded=False):
@@ -390,13 +401,14 @@ if active_data is not None:
 
     # --- Matrix Sequence Sorting Algorithms ---
     if is_active_search or is_active_genre:
+        # Sort chronologically by program start time ONLY if filtering is actively mutating the matrix
         def get_sort_datetime(node):
             if node['prog']:
                 return node['prog']['start']
             return datetime.max.replace(tzinfo=timezone.utc)
         render_nodes.sort(key=get_sort_datetime)
-    else:
-        render_nodes.sort(key=lambda node: channel_map[node['cid']]['name'])
+    # If no filters are active, the sort logic is bypassed. 
+    # Python dicts natively retain the XML insertion sequence, maintaining true EPG ordering.
 
     if not render_nodes:
         st.warning("No active nodes fulfill strict matrix criteria.")
