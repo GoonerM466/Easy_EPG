@@ -36,6 +36,11 @@ st.title("Easy EPG - A simple EPG Viewer by GoonerB")
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
+    /* Global scroll dampening for containers */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        overflow: hidden !important;
+    }
+
     [data-testid="stHorizontalBlock"] {
         height: 78vh;
         overflow: hidden;
@@ -56,7 +61,25 @@ st.markdown("""
         font-weight: 600 !important;
         margin: 0 0 4px 0 !important;
         line-height: 1.2 !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
+    
+    /* Viewport-dependent scalar matrix for directory images */
+    .card-logo-img {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+    }
+    @media (max-width: 768px) {
+        .card-logo-img {
+            max-height: 60px !important;
+            width: auto !important;
+            display: block;
+        }
+    }
+
     .right-header-container {
         display: flex;
         align-items: center;
@@ -369,7 +392,8 @@ if active_data is not None:
                     
                     with card_logo_col:
                         if cinfo.get("logo"):
-                            st.image(cinfo["logo"], use_container_width=True)
+                            # Image constrained explicitly by CSS payload
+                            st.html(f'<img src="{cinfo["logo"]}" class="card-logo-img" />')
                         else:
                             st.subheader("📺")
                             
@@ -443,11 +467,12 @@ if active_data is not None:
                 if current_prog:
                     st.markdown("### 🟢 Now Playing")
                     g_class = get_genre_style_class(current_prog['genre'])
-                    genre_header = f" | {current_prog['genre']}" if current_prog['genre'] else ""
+                    genre_segment = f'<div style="font-size: 0.85rem; font-weight: 400; opacity: 0.8; margin-top: -4px; margin-bottom: 8px;">[{current_prog["genre"]}]</div>' if current_prog['genre'] else ""
                     
                     st.html(f"""
                     <div class="schedule-detail-card {g_class}">
-                        <h4>⏱️ {current_prog['start'].strftime('%H:%M')} — {current_prog['title']}{genre_header}</h4>
+                        <h4>⏱️ {current_prog['start'].strftime('%H:%M')} — {current_prog['title']}</h4>
+                        {genre_segment}
                         <p style="margin-top:8px; line-height:1.5;">{current_prog['desc']}</p>
                     </div>
                     """)
@@ -456,12 +481,13 @@ if active_data is not None:
                     st.markdown("### ⏭️ Upcoming Programs")
                     for prog in future_progs:
                         g_class = get_genre_style_class(prog['genre'])
-                        genre_header = f" | {prog['genre']}" if prog['genre'] else ""
+                        genre_segment = f'<div style="font-size: 0.85rem; font-weight: 400; opacity: 0.8; margin-top: 2px; margin-bottom: 4px;">[{prog["genre"]}]</div>' if prog['genre'] else ""
                         
                         st.html(f"""
                         <div class="schedule-detail-card {g_class}">
-                            <strong>⏱️ {prog['start'].strftime('%H:%M')} — {prog['title']}</strong>{genre_header}
-                            <p style="margin-top:4px; font-size:0.95rem; line-height:1.4; opacity:0.9;">{prog['desc']}</p>
+                            <strong>⏱️ {prog['start'].strftime('%H:%M')} — {prog['title']}</strong>
+                            {genre_segment}
+                            <p style="margin-top:6px; font-size:0.95rem; line-height:1.4; opacity:0.9;">{prog['desc']}</p>
                         </div>
                         """)
                 elif not current_prog and not future_progs:
