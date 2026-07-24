@@ -36,9 +36,15 @@ st.title("Easy EPG - A simple EPG Viewer by GoonerB")
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
-    /* Global scroll dampening for containers */
+    /* Global scroll dampening for containers & touch-event propagation */
     [data-testid="stVerticalBlockBorderWrapper"] {
         overflow: hidden !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+    
+    [data-testid="stVerticalBlockBorderWrapper"] > div {
+        touch-action: pan-y !important;
     }
 
     [data-testid="stHorizontalBlock"] {
@@ -56,30 +62,8 @@ st.markdown("""
         padding-left: 20px;
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
-    .dir-ch-title {
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
-        margin: 0 0 4px 0 !important;
-        line-height: 1.2 !important;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
     
-    /* Viewport-dependent scalar matrix for directory images */
-    .card-logo-img {
-        width: 100%;
-        height: auto;
-        object-fit: contain;
-    }
-    @media (max-width: 768px) {
-        .card-logo-img {
-            max-height: 60px !important;
-            width: auto !important;
-            display: block;
-        }
-    }
-
+    /* Viewport-dependent scalar matrix for right pane header images */
     .right-header-container {
         display: flex;
         align-items: center;
@@ -133,6 +117,7 @@ st.markdown("""
         font-size: 0.7rem;
         border-radius: 4px;
         margin-bottom: 4px;
+        margin-top: 6px;
         background-color: rgba(255, 255, 255, 0.15);
         color: #fff;
     }
@@ -388,21 +373,22 @@ if active_data is not None:
                 is_active = (cid == st.session_state.active_channel_id)
                 
                 with st.container(border=True):
-                    card_logo_col, card_text_col = st.columns([1, 3])
+                    # Flexbox DOM Node logic injected to prevent mobile layout collapse
+                    logo_segment = f'<img src="{cinfo["logo"]}" style="max-width: 100%; max-height: 45px; object-fit: contain; display: block;" />' if cinfo.get("logo") else '<span style="font-size: 1.8rem;">📺</span>'
+                    badge_segment = f'<span class="match-badge">🔍 {match_type}</span>' if match_type != "Standard" else ""
                     
-                    with card_logo_col:
-                        if cinfo.get("logo"):
-                            # Image constrained explicitly by CSS payload
-                            st.html(f'<img src="{cinfo["logo"]}" class="card-logo-img" />')
-                        else:
-                            st.subheader("📺")
-                            
-                    with card_text_col:
-                        st.html(f'<p class="dir-ch-title">{cinfo["name"]}</p>')
-                        if match_type != "Standard":
-                            st.html(f'<span class="match-badge">🔍 {match_type}</span>')
-                        if group_badge:
-                            st.caption(group_badge)
+                    st.html(f"""
+                    <div style="display: flex; flex-direction: row; align-items: center; gap: 14px; margin-bottom: 12px; overflow: hidden;">
+                        <div style="flex-shrink: 0; width: 80px; display: flex; align-items: center; justify-content: center;">
+                            {logo_segment}
+                        </div>
+                        <div style="display: flex; flex-direction: column; overflow: hidden; flex-grow: 1;">
+                            <div style="font-weight: 600; font-size: 1.15rem; line-height: 1.2; white-space: normal; word-wrap: break-word;">{cinfo['name']}</div>
+                            <div style="font-size: 0.85rem; color: #888; margin-top: 4px;">{group_badge}</div>
+                            {badge_segment}
+                        </div>
+                    </div>
+                    """)
                             
                     if display_prog:
                         time_prefix = "Now Playing" if display_prog.get('is_current') else f"Upcoming ({display_prog['start'].strftime('%H:%M')})"
@@ -415,13 +401,14 @@ if active_data is not None:
                             total_mins = int((display_prog['stop'] - display_prog['start']).total_seconds() // 60)
                             span_label = f"⏱️ {total_mins} min span"
                             
-                        genre_label = f" [{display_prog['genre']}]" if display_prog['genre'] else ""
                         g_class = get_genre_style_class(display_prog['genre'])
+                        genre_html = f'<div style="font-size: 0.85rem; font-weight: 400; margin-top: 4px; opacity: 0.85;">[{display_prog["genre"]}]</div>' if display_prog['genre'] else ""
                         
                         st.html(f"""
                         <div class="schedule-detail-card {g_class}" style="padding: 10px; margin-bottom: 10px;">
-                            <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 2px;">{time_prefix}: {display_prog['title']}</div>
-                            <div style="font-size: 0.75rem; opacity: 0.8;">{span_label}{genre_label}</div>
+                            <div style="font-size: 0.95rem; font-weight: bold;">{time_prefix} - {display_prog['title']}</div>
+                            {genre_html}
+                            <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 6px;">{span_label}</div>
                         </div>
                         """)
                     else:
@@ -453,7 +440,7 @@ if active_data is not None:
                         {logo_segment}
                     </div>
                     <div class="right-header-text-box">
-                        <h2 class="right-header-title">{cinfo['name']}</h2>
+                        <div class="right-header-title">{cinfo['name']}</div>
                         {group_segment}
                     </div>
                 </div>
@@ -467,13 +454,13 @@ if active_data is not None:
                 if current_prog:
                     st.markdown("### 🟢 Now Playing")
                     g_class = get_genre_style_class(current_prog['genre'])
-                    genre_segment = f'<div style="font-size: 0.85rem; font-weight: 400; opacity: 0.8; margin-top: -4px; margin-bottom: 8px;">[{current_prog["genre"]}]</div>' if current_prog['genre'] else ""
+                    genre_html = f'<div style="font-size: 0.85rem; font-weight: 400; margin-top: 4px; opacity: 0.85;">[{current_prog["genre"]}]</div>' if current_prog['genre'] else ""
                     
                     st.html(f"""
                     <div class="schedule-detail-card {g_class}">
-                        <h4>⏱️ {current_prog['start'].strftime('%H:%M')} — {current_prog['title']}</h4>
-                        {genre_segment}
-                        <p style="margin-top:8px; line-height:1.5;">{current_prog['desc']}</p>
+                        <div style="font-weight: bold; font-size: 1.05rem;">{current_prog['start'].strftime('%H:%M')} - {current_prog['title']}</div>
+                        {genre_html}
+                        <div style="margin-top: 8px; line-height: 1.5; font-size: 0.95rem;">{current_prog['desc']}</div>
                     </div>
                     """)
                 
@@ -481,13 +468,13 @@ if active_data is not None:
                     st.markdown("### ⏭️ Upcoming Programs")
                     for prog in future_progs:
                         g_class = get_genre_style_class(prog['genre'])
-                        genre_segment = f'<div style="font-size: 0.85rem; font-weight: 400; opacity: 0.8; margin-top: 2px; margin-bottom: 4px;">[{prog["genre"]}]</div>' if prog['genre'] else ""
+                        genre_html = f'<div style="font-size: 0.85rem; font-weight: 400; margin-top: 4px; opacity: 0.85;">[{prog["genre"]}]</div>' if prog['genre'] else ""
                         
                         st.html(f"""
                         <div class="schedule-detail-card {g_class}">
-                            <strong>⏱️ {prog['start'].strftime('%H:%M')} — {prog['title']}</strong>
-                            {genre_segment}
-                            <p style="margin-top:6px; font-size:0.95rem; line-height:1.4; opacity:0.9;">{prog['desc']}</p>
+                            <div style="font-weight: bold; font-size: 1.05rem;">{prog['start'].strftime('%H:%M')} - {prog['title']}</div>
+                            {genre_html}
+                            <div style="margin-top: 6px; font-size: 0.95rem; line-height: 1.4; opacity: 0.9;">{prog['desc']}</div>
                         </div>
                         """)
                 elif not current_prog and not future_progs:
