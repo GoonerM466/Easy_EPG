@@ -207,12 +207,12 @@ def get_genre_style_class(category_text):
     if "movie" in cat_lower or "film" in cat_lower: return "genre-movie-tint"
     return ""
 
-@st.cache_data(ttl=3600, show_spinner="Parsing EPG Matrix...")
+@st.cache_data(ttl=3600, show_spinner="Parsing EPG Matrix & Taxonomic Indices...")
 def process_epg_stream(file_bytes, is_gz, tz_info):
     file_obj = io.BytesIO(file_bytes)
     context_stream = gzip.open(file_obj, 'rb') if is_gz else file_obj
 
-    channels, groups, programmes = {}, set(), {}
+    channels, groups, all_genres_set, programmes = {}, set(), set(), {}
     context = ET.iterparse(context_stream, events=('end',))
     
     for event, elem in context:
@@ -250,16 +250,25 @@ def process_epg_stream(file_bytes, is_gz, tz_info):
             if start_dt and stop_dt:
                 title = elem.find('title').text if elem.find('title') is not None else "No Title"
                 desc = elem.find('desc').text if elem.find('desc') is not None else ""
-                categories = [cat.text for cat in elem.findall('category') if cat.text]
-                category_text = " / ".join(categories) if categories else None
+                
+                raw_categories = [cat.text for cat in elem.findall('category') if cat.text]
+                clean_categories = []
+                for rc in raw_categories:
+                    parts = [p.strip() for p in rc.split('/')]
+                    for p in parts:
+                        if p:
+                            clean_categories.append(p)
+                            all_genres_set.add(p)
+                            
+                category_text = " / ".join(clean_categories) if clean_categories else None
                 
                 programmes.setdefault(ch_id, []).append({
                     "start": start_dt, "stop": stop_dt, "title": title,
-                    "desc": desc, "genre": category_text
+                    "desc": desc, "genre": category_text, "genre_list": clean_categories
                 })
             elem.clear()
 
-    return sorted(list(groups)), channels, programmes
+    return sorted(list(groups)), sorted(list(all_genres_set), key=str.lower), channels, programmes
 
 # --- Active Target Data Stream Resolution ---
 active_data = None
@@ -277,7 +286,7 @@ elif epg_url_query:
         st.error("Target Remote URL unresolvable or HTTP timeout exceeded.")
 
 if active_data is not None:
-    available_groups, channel_map, epg_raw = process_epg_stream(active_data, is_gzipped, target_tz)
+    available_groups, available_genres, channel_map, epg_raw = process_epg_stream(active_data, is_gzipped, target_tz)
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
     # --- Dynamic Time Window Filter Pass ---
@@ -297,48 +306,93 @@ if active_data is not None:
         epg_data[cid] = filtered_progs
 
     # --- Persistent Rendering Nodes ---
-    selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
+    pers_col1, pers_col2 = st.columns(2)
+    with pers_col1:
+        selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
+    with pers_col2:
+        selected_genre = st.selectbox("Genre Classification Filter", options=["All Genres"] + available_genres)
 
-    with st.expander("🔍 Search & Filter", expanded=False):
+    with st.expander("🔍 Search & Filter Strings", expanded=False):
         with st.form(key="search_form"):
             search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions", "Genre"], horizontal=True)
             search_query = st.text_input("Query String", "").strip().lower()
             st.form_submit_button("Execute Search")
     
-    # --- Multi-Card Array Generation Matrix ---
+    # --- Matrix Evaluation Loop ---
     render_nodes = []
     
     for cid, cinfo in channel_map.items():
         if selected_group != "All Groups" and cinfo['group'] != selected_group: 
             continue
             
-        if not search_query:
+        is_active_genre = (selected_genre != "All Genres")
+        is_active_search = bool(search_query)
+        
+        if not is_active_search and not is_active_genre:
             render_nodes.append({'cid': cid, 'type': 'Standard', 'prog': None})
             continue
 
-        if search_query in cinfo['name'].lower():
-            if search_vector in ["All", "Channels"]:
+        if is_active_search and not is_active_genre:
+            if search_vector in ["All", "Channels"] and search_query in cinfo['name'].lower():
                 render_nodes.append({'cid': cid, 'type': 'Channel Match', 'prog': None})
-                
-        if search_vector in ["All", "Programs", "Descriptions", "Genre"]:
-            for p in epg_data.get(cid, []):
+
+        for p in epg_data.get(cid, []):
+            genre_pass = True
+            search_pass = True
+            match_labels = []
+            
+            if is_active_genre:
+                if selected_genre not in p.get('genre_list', []):
+                    genre_pass = False
+                else:
+                    match_labels.append("Genre Match")
+                    
+            if is_active_search:
                 t_match = search_query in p['title'].lower()
                 d_match = search_query in p['desc'].lower()
                 g_match = p['genre'] is not None and search_query in p['genre'].lower()
                 
-                if t_match and search_vector in ["All", "Programs"]:
-                    render_nodes.append({'cid': cid, 'type': 'Program Match', 'prog': p})
-                
-                if d_match and search_vector in ["All", "Descriptions"]:
-                    if not (search_vector == "All" and t_match):
-                        render_nodes.append({'cid': cid, 'type': 'Desc Match', 'prog': p})
+                if search_vector == "All":
+                    if not (t_match or d_match or g_match):
+                        search_pass = False
+                    else:
+                        if t_match: match_labels.append('Query: Title')
+                        elif d_match: match_labels.append('Query: Desc')
+                        elif g_match: match_labels.append('Query: Genre')
+                elif search_vector == "Programs":
+                    if not t_match: search_pass = False
+                    else: match_labels.append('Query: Title')
+                elif search_vector == "Descriptions":
+                    if not d_match: search_pass = False
+                    else: match_labels.append('Query: Desc')
+                elif search_vector == "Genre":
+                    if not g_match: search_pass = False
+                    else: match_labels.append('Query: Genre')
+                elif search_vector == "Channels":
+                     if search_query not in cinfo['name'].lower(): search_pass = False
+                     else: match_labels.append('Query: Channel')
 
-                if g_match and search_vector in ["All", "Genre"]:
-                    if not (search_vector == "All" and (t_match or d_match)):
-                        render_nodes.append({'cid': cid, 'type': 'Genre Match', 'prog': p})
+            if genre_pass and search_pass:
+                final_type = " | ".join(dict.fromkeys(match_labels)) if match_labels else "Filtered"
+                render_nodes.append({'cid': cid, 'type': final_type, 'prog': p})
+
+    # --- Chronological Time-Vector Sort ---
+    def get_sort_datetime(node):
+        if node['prog']:
+            return node['prog']['start']
+        
+        schedule = epg_data.get(node['cid'], [])
+        current_prog = next((p for p in schedule if p['is_current']), None)
+        if current_prog:
+            return current_prog['start']
+        elif schedule:
+            return schedule[0]['start']
+        return datetime.max.replace(tzinfo=timezone.utc)
+        
+    render_nodes.sort(key=get_sort_datetime)
 
     if not render_nodes:
-        st.warning("No active nodes fulfill strict search criteria.")
+        st.warning("No active nodes fulfill strict matrix criteria.")
     else:
         total_nodes = len(render_nodes)
         if per_page == "All":
@@ -355,7 +409,7 @@ if active_data is not None:
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
         with left_pane:
-            st.markdown("### Channel Directory")
+            st.markdown("### Rendering Directory")
             
             for node in page_nodes:
                 cid = node['cid']
@@ -373,7 +427,6 @@ if active_data is not None:
                 is_active = (cid == st.session_state.active_channel_id)
                 
                 with st.container(border=True):
-                    # Flexbox DOM Node logic injected to prevent mobile layout collapse
                     logo_segment = f'<img src="{cinfo["logo"]}" style="max-width: 100%; max-height: 45px; object-fit: contain; display: block;" />' if cinfo.get("logo") else '<span style="font-size: 1.8rem;">📺</span>'
                     badge_segment = f'<span class="match-badge">🔍 {match_type}</span>' if match_type != "Standard" else ""
                     
