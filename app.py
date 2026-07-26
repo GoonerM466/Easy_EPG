@@ -124,29 +124,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- DOM Hardware Interception & Focus Blur Protocol ---
+# --- Browser Prototype Engine Override (Hardware Keyboard Suppression) ---
 st.html("""
 <script>
-    const enforceNoKeyboard = () => {
-        const doc = window.parent ? window.parent.document : document;
-        const inputs = doc.querySelectorAll('[data-testid="stSelectbox"] input');
-        inputs.forEach(node => {
-            node.setAttribute('inputmode', 'none');
-            node.setAttribute('readonly', 'true');
-            if (!node.dataset.keyboardLocked) {
-                node.dataset.keyboardLocked = 'true';
-                node.addEventListener('focus', (e) => {
-                    e.target.blur();
-                }, true);
-                node.addEventListener('touchstart', (e) => {
-                    e.target.blur();
-                }, true);
+    const targetWindow = window.parent || window;
+    if (!targetWindow.focusIntercepted) {
+        const origFocus = targetWindow.HTMLInputElement.prototype.focus;
+        targetWindow.HTMLInputElement.prototype.focus = function(options) {
+            if (this.closest('[data-testid="stSelectbox"]')) {
+                return; // Execution dropped: OS keyboard initialization blocked
             }
-        });
-    };
-    enforceNoKeyboard();
-    const observer = new MutationObserver(enforceNoKeyboard);
-    observer.observe(window.parent ? window.parent.document.body : document.body, {childList: true, subtree: true});
+            origFocus.call(this, options);
+        };
+        targetWindow.focusIntercepted = true;
+    }
 </script>
 """)
 
@@ -350,7 +341,7 @@ if active_data is not None:
             search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions", "Genre"], horizontal=True)
             search_query = st.text_input("Query String", "").strip().lower()
             st.form_submit_button("Execute Search")
-    
+            
     # --- Matrix Evaluation Loop ---
     render_nodes = []
     is_active_genre = (selected_genre != "All Genres")
@@ -408,7 +399,6 @@ if active_data is not None:
                 final_type = " | ".join(dict.fromkeys(match_labels)) if match_labels else "Filtered"
                 render_nodes.append({'cid': cid, 'type': final_type, 'prog': p})
 
-    # --- Matrix Sequence Sorting Algorithms ---
     if is_active_search or is_active_genre:
         def get_sort_datetime(node):
             if node['prog']:
@@ -416,8 +406,19 @@ if active_data is not None:
             return datetime.max.replace(tzinfo=timezone.utc)
         render_nodes.sort(key=get_sort_datetime)
 
+    # --- State Desynchronization Resolver & Filter Hash Evaluator ---
+    current_filter_hash = hash((selected_group, selected_genre, search_query, search_vector))
+    filter_mutation_detected = False
+    
+    if "system_filter_hash" not in st.session_state:
+        st.session_state.system_filter_hash = current_filter_hash
+    elif st.session_state.system_filter_hash != current_filter_hash:
+        filter_mutation_detected = True
+        st.session_state.system_filter_hash = current_filter_hash
+
     if not render_nodes:
         st.warning("No active nodes fulfill strict matrix criteria.")
+        st.session_state.active_channel_id = None
     else:
         total_nodes = len(render_nodes)
         if per_page == "All":
@@ -428,8 +429,21 @@ if active_data is not None:
             current_page = st.number_input(f"Page (1 of {chunks})", min_value=1, max_value=chunks, value=1)
             page_nodes = render_nodes[(current_page - 1) * per_page: min(((current_page - 1) * per_page) + per_page, total_nodes)]
 
-        if "active_channel_id" not in st.session_state and page_nodes:
+        # Hard reset pointer state on matrix mutation
+        if filter_mutation_detected or "active_channel_id" not in st.session_state:
             st.session_state.active_channel_id = page_nodes[0]['cid']
+            
+        # Hard reset left pane Y-axis scroll mapping
+        if filter_mutation_detected:
+            st.html("""
+            <script>
+                const targetDoc = window.parent || window;
+                const leftPane = targetDoc.document.querySelector('[data-testid="stHorizontalBlock"] > div:nth-child(1)');
+                if (leftPane) {
+                    leftPane.scrollTop = 0;
+                }
+            </script>
+            """)
 
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
