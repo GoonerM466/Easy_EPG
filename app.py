@@ -163,6 +163,11 @@ st.markdown("""
         gap: 16px;
         width: 100%;
         margin-bottom: 12px;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+    .right-header-container:active {
+        opacity: 0.6;
     }
     .right-header-logo-box {
         width: 70px;
@@ -217,9 +222,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Configuration Controls (URL Query Parameter Sync) ---
+# --- Configuration Controls (URL Query Parameter Sync & Native Components) ---
 with st.expander("⚙️ Settings", expanded=False):
-    # Parse URL parameters with fallback defaults (Patched for 'All' type variance)
     url_window = st.query_params.get("window", "2")
     if url_window == "All":
         default_window_val = "All"
@@ -235,6 +239,7 @@ with st.expander("⚙️ Settings", expanded=False):
     config_col1, config_col2, config_col3 = st.columns(3)
 
     with config_col1:
+        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Local Timezone Offset</p>", unsafe_allow_html=True)
         tz_options = {
             "UTC / GMT": 0,
             "EST / EDT (UTC-5 / UTC-4)": -4,
@@ -244,31 +249,38 @@ with st.expander("⚙️ Settings", expanded=False):
             "UK / BST (UTC+0 / UTC+1)": 1,
             "CET / CEST (UTC+1 / UTC+2)": 2
         }
-        selected_tz_offset = st.selectbox("Local Timezone Offset", options=list(tz_options.keys()), index=1)
+        tz_keys = list(tz_options.keys())
+        raw_tz = native_selectbox(options=tz_keys, default_value=tz_keys[1], key="native_tz")
+        selected_tz_offset = raw_tz if raw_tz else tz_keys[1]
         tz_hours = tz_options[selected_tz_offset]
         target_tz = timezone(timedelta(hours=tz_hours))
 
     with config_col2:
+        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Future Programming Window</p>", unsafe_allow_html=True)
         lookahead_options = [0, 2, 4, 6, 8, 12, 24, 48, 72, "All"]
         if default_window_val not in lookahead_options:
             default_window_val = 2
-        lookahead_index = lookahead_options.index(default_window_val)
-
-        lookahead_hours = st.selectbox(
-            "Future Programming Window",
-            options=lookahead_options,
-            index=lookahead_index,
-            format_func=lambda x: "Always Current Program Only" if x == 0 else ("All Remaining Schedule" if x == "All" else f"Current + {x} Hours")
-        )
+            
+        lookahead_strings = ["Always Current Program Only" if x == 0 else ("All Remaining Schedule" if x == "All" else f"Current + {x} Hours") for x in lookahead_options]
+        default_lookahead_str = lookahead_strings[lookahead_options.index(default_window_val)]
+        
+        raw_lookahead = native_selectbox(options=lookahead_strings, default_value=default_lookahead_str, key="native_window")
+        selected_lookahead_str = raw_lookahead if raw_lookahead else default_lookahead_str
+        lookahead_hours = lookahead_options[lookahead_strings.index(selected_lookahead_str)]
         st.query_params["window"] = str(lookahead_hours)
 
     with config_col3:
+        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Items Per Page</p>", unsafe_allow_html=True)
         per_page_options = [50, 100, 200, 500, 1000, 2000, "All"]
         if default_nodes_val not in per_page_options:
             default_nodes_val = 100
-        per_page_index = per_page_options.index(default_nodes_val)
-
-        per_page = st.selectbox("Render Nodes Per Page", options=per_page_options, index=per_page_index)
+            
+        per_page_strings = [str(x) for x in per_page_options]
+        default_per_page_str = str(default_nodes_val)
+        
+        raw_per_page = native_selectbox(options=per_page_strings, default_value=default_per_page_str, key="native_nodes")
+        selected_per_page_str = raw_per_page if raw_per_page else default_per_page_str
+        per_page = int(selected_per_page_str) if selected_per_page_str != "All" else "All"
         st.query_params["nodes"] = str(per_page)
 
 # --- Dual-Ingestion Gateway ---
@@ -416,7 +428,6 @@ if active_data is not None:
             is_upcoming = (now_runtime <= p['start'])
             
             if is_current or is_upcoming:
-                # Patched Type-Mismatch Bypass for "All" string modifier
                 if is_upcoming and (lookahead_hours != "All") and (lookahead_hours > 0) and ((p['start'] - now_runtime).total_seconds() / 3600.0 > lookahead_hours):
                     continue
                 p_copy = dict(p)
@@ -532,20 +543,43 @@ if active_data is not None:
     else:
         total_nodes = len(render_nodes)
         
-        # Syntax restoration & integrity patch applied here
+        # Modified Pagination Resolver: Hybrid Native Selector + Sequential Progression API
         if per_page == "All":
             page_nodes = render_nodes
         else:
-            per_page = int(per_page)
             chunks = (total_nodes + per_page - 1) // per_page
-            current_page = st.number_input(f"Page (1 of {chunks})", min_value=1, max_value=chunks, value=1)
-            page_nodes = render_nodes[(current_page - 1) * per_page: min(((current_page - 1) * per_page) + per_page, total_nodes)]
+            
+            if "pagination_index" not in st.session_state or filter_mutation_detected:
+                st.session_state.pagination_index = 1
+                
+            page_ui_col1, page_ui_col2, page_ui_col3 = st.columns([1, 4, 1])
+            with page_ui_col1:
+                st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+                if st.button("◄", use_container_width=True) and st.session_state.pagination_index > 1:
+                    st.session_state.pagination_index -= 1
+                    st.rerun()
+            with page_ui_col2:
+                st.markdown(f"<p style='font-size: 0.85rem; margin-bottom: 2px; text-align: center;'>Page Index (1 - {chunks})</p>", unsafe_allow_html=True)
+                page_options = [f"Page {i} of {chunks}" for i in range(1, chunks + 1)]
+                current_target_str = f"Page {st.session_state.pagination_index} of {chunks}"
+                
+                raw_page_sel = native_selectbox(options=page_options, default_value=current_target_str, key=f"native_page_{current_filter_hash}_{chunks}")
+                
+                if raw_page_sel and raw_page_sel != current_target_str:
+                    extracted_index = int(raw_page_sel.split(" ")[1])
+                    st.session_state.pagination_index = extracted_index
+                    st.rerun()
+            with page_ui_col3:
+                st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+                if st.button("►", use_container_width=True) and st.session_state.pagination_index < chunks:
+                    st.session_state.pagination_index += 1
+                    st.rerun()
 
-        # Hard reset pointer state on matrix mutation
+            page_nodes = render_nodes[(st.session_state.pagination_index - 1) * per_page: min(((st.session_state.pagination_index - 1) * per_page) + per_page, total_nodes)]
+
         if filter_mutation_detected or "active_channel_id" not in st.session_state:
             st.session_state.active_channel_id = page_nodes[0]['cid']
             
-        # Hard reset left pane Y-axis scroll mapping
         if filter_mutation_detected:
             st.html("""
             <script>
@@ -638,21 +672,19 @@ if active_data is not None:
                     
                 group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Heuristic Index: <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
                 
+                # Invisible clipboard write payload injected via DOM manipulation inline handler
                 st.html(f"""
-                <div class="right-header-container">
+                <div class="right-header-container" onclick="navigator.clipboard.writeText('{cinfo['name'].replace("'", "\\'")}').then(() => {{ const el = document.getElementById('clipboard-hash'); el.innerText = ' [String Copied]'; el.style.color = '#4CAF50'; setTimeout(() => el.innerText = '', 2500); }})">
                     <div class="right-header-logo-box">
                         {logo_segment}
                     </div>
                     <div class="right-header-text-box">
-                        <div class="right-header-title">{cinfo['name']}</div>
+                        <div class="right-header-title">{cinfo['name']}<span id="clipboard-hash" style="font-size: 0.85rem; transition: color 0.2s;"></span></div>
                         {group_segment}
+                        <div style="font-size: 0.75rem; opacity: 0.55; margin-top: 3px;">📋 Click node header to copy channel identifier</div>
                     </div>
                 </div>
                 """)
-                
-                # Injection of native copy target to fulfill clipboard requirement
-                st.caption("📋 Copy Channel Identifier String:")
-                st.code(cinfo['name'], language=None)
                             
                 st.markdown("---")
                 
