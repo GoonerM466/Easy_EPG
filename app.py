@@ -630,7 +630,7 @@ if active_data is not None:
                 else:
                     logo_segment = '<span style="font-size: 2.2rem;">📺</span>'
                     
-                group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Heuristic Index: <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
+                group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">• <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
                 
                 st.html(f"""
                 <div class="right-header-container">
