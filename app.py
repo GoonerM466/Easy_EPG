@@ -485,21 +485,21 @@ if active_data is not None:
                     if not (t_match or d_match or g_match):
                         search_pass = False
                     else:
-                        if t_match: match_labels.append('Query: Title')
-                        elif d_match: match_labels.append('Query: Desc')
-                        elif g_match: match_labels.append('Query: Genre')
+                        if t_match: match_labels.append('Title Match')
+                        elif d_match: match_labels.append('Description Match')
+                        elif g_match: match_labels.append('Genre Match')
                 elif search_vector == "Programs":
                     if not t_match: search_pass = False
-                    else: match_labels.append('Query: Title')
+                    else: match_labels.append('Title Match')
                 elif search_vector == "Descriptions":
                     if not d_match: search_pass = False
-                    else: match_labels.append('Query: Desc')
+                    else: match_labels.append('Description Match')
                 elif search_vector == "Genre":
                     if not g_match: search_pass = False
-                    else: match_labels.append('Query: Genre')
+                    else: match_labels.append('Genre Match')
                 elif search_vector == "Channels":
                      if search_query not in cinfo['name'].lower(): search_pass = False
-                     else: match_labels.append('Query: Channel')
+                     else: match_labels.append('Channel Match')
 
             if genre_pass and search_pass:
                 final_type = " | ".join(dict.fromkeys(match_labels)) if match_labels else "Filtered"
