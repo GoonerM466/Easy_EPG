@@ -15,6 +15,7 @@ _COMPONENT_DIR = os.path.abspath("native_select_component")
 if not os.path.exists(_COMPONENT_DIR):
     os.makedirs(_COMPONENT_DIR)
 
+# Fixed height (42px) to prevent layout truncation shown in visual diagnostics
 _HTML_PAYLOAD = """
 <!DOCTYPE html>
 <html>
@@ -28,6 +29,7 @@ _HTML_PAYLOAD = """
         }
         select {
             width: 100%;
+            height: 38px; 
             padding: 8px 12px;
             font-size: 16px;
             border-radius: 6px;
@@ -79,11 +81,10 @@ _HTML_PAYLOAD = """
                         selectEl.appendChild(el);
                     });
                     
-                    sendMessageToStreamlit("streamlit:setFrameHeight", { height: selectEl.offsetHeight + 10 });
+                    sendMessageToStreamlit("streamlit:setFrameHeight", { height: 42 });
                     initialized = true;
                 }
                 
-                // Force sync UI state with Python backend state injections
                 if (selectEl.value !== default_val) {
                     selectEl.value = default_val;
                 }
@@ -165,11 +166,6 @@ st.markdown("""
         gap: 16px;
         width: 100%;
         margin-bottom: 12px;
-        cursor: pointer;
-        transition: opacity 0.2s;
-    }
-    .right-header-container:active {
-        opacity: 0.6;
     }
     .right-header-logo-box {
         width: 70px;
@@ -419,7 +415,6 @@ if active_data is not None:
     available_groups, channel_map, epg_raw = process_epg_stream(active_data, is_gzipped, target_tz)
     now_runtime = datetime.now(timezone.utc).astimezone(target_tz)
     
-    # --- Dynamic Time Window Filter Pass & Active Taxonomic Extraction ---
     epg_data = {}
     active_genres_set = set()
     
@@ -443,9 +438,7 @@ if active_data is not None:
 
     available_genres = sorted(list(active_genres_set), key=str.lower)
 
-    # --- Persistent Rendering Nodes (Native Component Vectors) ---
     pers_col1, pers_col2 = st.columns(2)
-    
     group_options = ["All Groups"] + available_groups
     genre_options = ["All Genres"] + available_genres
 
@@ -529,9 +522,10 @@ if active_data is not None:
             return datetime.max.replace(tzinfo=timezone.utc)
         render_nodes.sort(key=get_sort_datetime)
 
-    # --- State Desynchronization Resolver & Filter Hash Evaluator ---
+    # --- State Desynchronization Resolver ---
     current_filter_hash = hash((selected_group, selected_genre, search_query, search_vector))
     filter_mutation_detected = False
+    page_mutation_detected = False
     
     if "system_filter_hash" not in st.session_state:
         st.session_state.system_filter_hash = current_filter_hash
@@ -545,7 +539,6 @@ if active_data is not None:
     else:
         total_nodes = len(render_nodes)
         
-        # Modified Pagination Resolver: Hybrid Native Selector + Sequential Progression API
         if per_page == "All":
             page_nodes = render_nodes
         else:
@@ -576,19 +569,25 @@ if active_data is not None:
                     st.session_state.pagination_index += 1
                     st.rerun()
 
+            # Delta tracking for pagination synchronization
+            if "last_page_index" not in st.session_state:
+                st.session_state.last_page_index = st.session_state.pagination_index
+            elif st.session_state.last_page_index != st.session_state.pagination_index:
+                page_mutation_detected = True
+                st.session_state.last_page_index = st.session_state.pagination_index
+
             page_nodes = render_nodes[(st.session_state.pagination_index - 1) * per_page: min(((st.session_state.pagination_index - 1) * per_page) + per_page, total_nodes)]
 
-        if filter_mutation_detected or "active_channel_id" not in st.session_state:
+        # Force state parity against out-of-bounds nodes on page/filter shift
+        if filter_mutation_detected or page_mutation_detected or "active_channel_id" not in st.session_state:
             st.session_state.active_channel_id = page_nodes[0]['cid']
             
-        if filter_mutation_detected:
+        if filter_mutation_detected or page_mutation_detected:
             st.html("""
             <script>
                 const targetDoc = window.parent || window;
                 const leftPane = targetDoc.document.querySelector('[data-testid="stHorizontalBlock"] > div:nth-child(1)');
-                if (leftPane) {
-                    leftPane.scrollTop = 0;
-                }
+                if (leftPane) { leftPane.scrollTop = 0; }
             </script>
             """)
 
@@ -631,7 +630,6 @@ if active_data is not None:
                             
                     if display_prog:
                         time_prefix = "Now Playing" if display_prog.get('is_current') else f"Upcoming ({display_prog['start'].strftime('%H:%M')})"
-                        
                         if display_prog.get('is_current'):
                             remaining_sec = (display_prog['stop'] - now_runtime).total_seconds()
                             remaining_mins = max(0, int(remaining_sec // 60))
@@ -655,6 +653,11 @@ if active_data is not None:
                     
                     btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
                     btn_label = "🟢 Channel Selected" if is_active else "Open Channel Schedule"
+                    
+                    # Hidden metadata footprint injection for native DOM interception script
+                    safe_name = cinfo['name'].replace('"', '&quot;')
+                    st.markdown(f'<div class="epg-copy-target" data-chan-name="{safe_name}" style="display:none;"></div>', unsafe_allow_html=True)
+                    
                     if st.button(btn_label, key=f"select_{cid}_{match_type}_{btn_key_suffix}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.active_channel_id = cid
                         st.rerun()
@@ -673,34 +676,13 @@ if active_data is not None:
                     
                 group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Heuristic Index: <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
                 
-                # Zero-footprint synchronous clipboard execution vector via fallback API
                 st.html(f"""
-                <script>
-                function executeFallbackCopy(text) {{
-                    const el = document.createElement('textarea');
-                    el.value = text;
-                    el.style.position = 'absolute';
-                    el.style.left = '-9999px';
-                    document.body.appendChild(el);
-                    el.select();
-                    try {{
-                        document.execCommand('copy');
-                        const msg = document.getElementById('clipboard-hash');
-                        msg.innerText = ' [Copied]';
-                        msg.style.color = '#4CAF50';
-                        setTimeout(() => msg.innerText = '', 2000);
-                    }} catch (err) {{
-                        console.error('Document payload replication rejected by sandbox constraints.');
-                    }}
-                    document.body.removeChild(el);
-                }}
-                </script>
-                <div class="right-header-container" onclick="executeFallbackCopy('{cinfo['name'].replace("'", "\\'")}')">
+                <div class="right-header-container">
                     <div class="right-header-logo-box">
                         {logo_segment}
                     </div>
                     <div class="right-header-text-box">
-                        <div class="right-header-title">{cinfo['name']}<span id="clipboard-hash" style="font-size: 0.85rem; transition: color 0.2s;"></span></div>
+                        <div class="right-header-title">{cinfo['name']}</div>
                         {group_segment}
                     </div>
                 </div>
@@ -739,3 +721,33 @@ if active_data is not None:
                         """)
                 elif not current_prog and not future_progs:
                     st.info("No timeline data loaded for this entity.")
+
+# --- DOM Capture Interceptor Script (Clipboard Bypass) ---
+st.components.v1.html("""
+<script>
+const parentDoc = window.parent.document;
+if (!parentDoc.window_epg_bound) {
+    parentDoc.addEventListener('click', function(e) {
+        let target = e.target.closest('button');
+        if (target && (target.innerText.includes("Open Channel Schedule") || target.innerText.includes("Channel Selected"))) {
+            let container = target.closest('div[data-testid="stVerticalBlock"]');
+            if (container) {
+                let dataNode = container.querySelector('.epg-copy-target');
+                if (dataNode) {
+                    let name = dataNode.getAttribute('data-chan-name');
+                    let ta = parentDoc.createElement('textarea');
+                    ta.value = name;
+                    ta.style.position = 'absolute'; 
+                    ta.style.opacity = '0';
+                    parentDoc.body.appendChild(ta);
+                    ta.select();
+                    try { parentDoc.execCommand('copy'); } catch(err) { console.error("Clipboard replication failed."); }
+                    parentDoc.body.removeChild(ta);
+                }
+            }
+        }
+    }, true);
+    parentDoc.window_epg_bound = true;
+}
+</script>
+""", height=0)
