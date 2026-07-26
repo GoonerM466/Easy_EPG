@@ -124,7 +124,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-st.title("Easy EPG - A simple EPG Viewer by GoonerB")
+st.title("Easy EPG")
 
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
@@ -260,7 +260,7 @@ with st.expander("⚙️ Settings", expanded=False):
         st.query_params["window"] = str(lookahead_hours)
 
     with config_col3:
-        per_page_options = [100, 200, 500, 1000, 2000, "All"]
+        per_page_options = [50, 100, 200, 500, 1000, 2000, "All"]
         if default_nodes_val not in per_page_options:
             default_nodes_val = 100
         per_page_index = per_page_options.index(default_nodes_val)
@@ -269,13 +269,13 @@ with st.expander("⚙️ Settings", expanded=False):
         st.query_params["nodes"] = str(per_page)
 
 # --- Dual-Ingestion Gateway ---
-with st.expander("📡 Source Configuration", expanded=False):
+with st.expander("📡 Source Config", expanded=False):
     epg_url_query = st.query_params.get("epg_url", "")
     col_input1, col_input2 = st.columns(2)
 
     with col_input1:
         with st.form(key="url_form"):
-            epg_url_input = st.text_input("Remote EPG URL (Cross-Session Auto-Load)", value=epg_url_query)
+            epg_url_input = st.text_input("Remote EPG URL", value=epg_url_query)
             submit_url = st.form_submit_button("Load Remote EPG")
             
             if submit_url and epg_url_input:
@@ -321,7 +321,7 @@ def get_genre_style_class(category_text):
     if "movie" in cat_lower or "film" in cat_lower: return "genre-movie-tint"
     return ""
 
-@st.cache_data(ttl=3600, show_spinner="Parsing EPG Matrix...")
+@st.cache_data(ttl=3600, show_spinner="Parsing EPG...")
 def process_epg_stream(file_bytes, is_gz, tz_info):
     file_obj = io.BytesIO(file_bytes)
     context_stream = gzip.open(file_obj, 'rb') if is_gz else file_obj
@@ -442,7 +442,7 @@ if active_data is not None:
         raw_genre = native_selectbox(options=genre_options, default_value="All Genres", key="native_genre")
         selected_genre = raw_genre if raw_genre is not None else "All Genres"
 
-    with st.expander("🔍 Search & Filter Strings", expanded=False):
+    with st.expander("🔍 Search & Filter", expanded=False):
         with st.form(key="search_form"):
             search_vector = st.radio("Search Target Scope", options=["All", "Channels", "Programs", "Descriptions", "Genre"], horizontal=True)
             search_query = st.text_input("Query String", "").strip().lower()
@@ -523,7 +523,7 @@ if active_data is not None:
         st.session_state.system_filter_hash = current_filter_hash
 
     if not render_nodes:
-        st.warning("No active nodes fulfill strict matrix criteria.")
+        st.warning("No Results Found...")
         st.session_state.active_channel_id = None
     else:
         total_nodes = len(render_nodes)
@@ -610,7 +610,7 @@ if active_data is not None:
                         </div>
                         """)
                     else:
-                        st.caption("ℹ️ No scheduling metadata captured for this window.")
+                        st.caption("ℹ️ No Program Info...")
                     
                     btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
                     btn_label = "🟢 Channel Selected" if is_active else "Open Channel Schedule"
