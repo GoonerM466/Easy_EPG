@@ -60,6 +60,7 @@ _HTML_PAYLOAD = """
             if (event.data.type === "streamlit:render") {
                 const args = event.data.args;
                 const theme = event.data.theme;
+                const default_val = String(args.default_value);
                 
                 if (theme) {
                     document.body.style.backgroundColor = theme.backgroundColor;
@@ -70,18 +71,21 @@ _HTML_PAYLOAD = """
 
                 if (!initialized) {
                     const options = args.options;
-                    const default_val = args.default_value;
                     
                     options.forEach(opt => {
                         const el = document.createElement("option");
                         el.value = opt;
                         el.textContent = opt;
-                        if (opt === default_val) el.selected = true;
                         selectEl.appendChild(el);
                     });
                     
                     sendMessageToStreamlit("streamlit:setFrameHeight", { height: selectEl.offsetHeight + 10 });
                     initialized = true;
+                }
+                
+                // Force sync UI state with Python backend state injections
+                if (selectEl.value !== default_val) {
+                    selectEl.value = default_val;
                 }
             }
         });
@@ -129,7 +133,6 @@ st.title("Easy EPG")
 # --- Custom UI Pane Constraints & Global Theme Tints ---
 st.markdown("""
 <style>
-    /* Global scroll dampening for containers & touch-event propagation */
     [data-testid="stVerticalBlockBorderWrapper"] {
         overflow: hidden !important;
         height: auto !important;
@@ -156,7 +159,6 @@ st.markdown("""
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
     
-    /* Viewport-dependent scalar matrix for right pane header images */
     .right-header-container {
         display: flex;
         align-items: center;
@@ -559,15 +561,14 @@ if active_data is not None:
                     st.session_state.pagination_index -= 1
                     st.rerun()
             with page_ui_col2:
-                st.markdown(f"<p style='font-size: 0.85rem; margin-bottom: 2px; text-align: center;'>Page Index (1 - {chunks})</p>", unsafe_allow_html=True)
-                page_options = [f"Page {i} of {chunks}" for i in range(1, chunks + 1)]
-                current_target_str = f"Page {st.session_state.pagination_index} of {chunks}"
+                st.markdown(f"<p style='font-size: 0.85rem; margin-bottom: 2px; text-align: center;'>Page Index (Max: {chunks})</p>", unsafe_allow_html=True)
+                page_options = [str(i) for i in range(1, chunks + 1)]
+                current_target_str = str(st.session_state.pagination_index)
                 
                 raw_page_sel = native_selectbox(options=page_options, default_value=current_target_str, key=f"native_page_{current_filter_hash}_{chunks}")
                 
                 if raw_page_sel and raw_page_sel != current_target_str:
-                    extracted_index = int(raw_page_sel.split(" ")[1])
-                    st.session_state.pagination_index = extracted_index
+                    st.session_state.pagination_index = int(raw_page_sel)
                     st.rerun()
             with page_ui_col3:
                 st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
@@ -672,16 +673,35 @@ if active_data is not None:
                     
                 group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Heuristic Index: <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
                 
-                # Invisible clipboard write payload injected via DOM manipulation inline handler
+                # Zero-footprint synchronous clipboard execution vector via fallback API
                 st.html(f"""
-                <div class="right-header-container" onclick="navigator.clipboard.writeText('{cinfo['name'].replace("'", "\\'")}').then(() => {{ const el = document.getElementById('clipboard-hash'); el.innerText = ' [String Copied]'; el.style.color = '#4CAF50'; setTimeout(() => el.innerText = '', 2500); }})">
+                <script>
+                function executeFallbackCopy(text) {{
+                    const el = document.createElement('textarea');
+                    el.value = text;
+                    el.style.position = 'absolute';
+                    el.style.left = '-9999px';
+                    document.body.appendChild(el);
+                    el.select();
+                    try {{
+                        document.execCommand('copy');
+                        const msg = document.getElementById('clipboard-hash');
+                        msg.innerText = ' [Copied]';
+                        msg.style.color = '#4CAF50';
+                        setTimeout(() => msg.innerText = '', 2000);
+                    }} catch (err) {{
+                        console.error('Document payload replication rejected by sandbox constraints.');
+                    }}
+                    document.body.removeChild(el);
+                }}
+                </script>
+                <div class="right-header-container" onclick="executeFallbackCopy('{cinfo['name'].replace("'", "\\'")}')">
                     <div class="right-header-logo-box">
                         {logo_segment}
                     </div>
                     <div class="right-header-text-box">
                         <div class="right-header-title">{cinfo['name']}<span id="clipboard-hash" style="font-size: 0.85rem; transition: color 0.2s;"></span></div>
                         {group_segment}
-                        <div style="font-size: 0.75rem; opacity: 0.55; margin-top: 3px;">📋 Click node header to copy channel identifier</div>
                     </div>
                 </div>
                 """)
