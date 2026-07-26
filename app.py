@@ -219,12 +219,15 @@ st.markdown("""
 
 # --- Configuration Controls (URL Query Parameter Sync) ---
 with st.expander("⚙️ Settings", expanded=False):
-    # Parse URL parameters with fallback defaults
+    # Parse URL parameters with fallback defaults (Patched for 'All' type variance)
     url_window = st.query_params.get("window", "2")
-    try:
-        default_window_val = int(url_window)
-    except ValueError:
-        default_window_val = 2
+    if url_window == "All":
+        default_window_val = "All"
+    else:
+        try:
+            default_window_val = int(url_window)
+        except ValueError:
+            default_window_val = 2
 
     url_nodes = st.query_params.get("nodes", "100")
     default_nodes_val = int(url_nodes) if url_nodes != "All" else "All"
@@ -255,7 +258,7 @@ with st.expander("⚙️ Settings", expanded=False):
             "Future Programming Window",
             options=lookahead_options,
             index=lookahead_index,
-            format_func=lambda x: "Always Current Program Only" if x == 0 else f"Current + {x} Hours"
+            format_func=lambda x: "Always Current Program Only" if x == 0 else ("All Remaining Schedule" if x == "All" else f"Current + {x} Hours")
         )
         st.query_params["window"] = str(lookahead_hours)
 
@@ -413,7 +416,8 @@ if active_data is not None:
             is_upcoming = (now_runtime <= p['start'])
             
             if is_current or is_upcoming:
-                if is_upcoming and (lookahead_hours > 0) and ((p['start'] - now_runtime).total_seconds() / 3600.0 > lookahead_hours):
+                # Patched Type-Mismatch Bypass for "All" string modifier
+                if is_upcoming and (lookahead_hours != "All") and (lookahead_hours > 0) and ((p['start'] - now_runtime).total_seconds() / 3600.0 > lookahead_hours):
                     continue
                 p_copy = dict(p)
                 p_copy['is_current'] = is_current
@@ -527,6 +531,8 @@ if active_data is not None:
         st.session_state.active_channel_id = None
     else:
         total_nodes = len(render_nodes)
+        
+        # Syntax restoration & integrity patch applied here
         if per_page == "All":
             page_nodes = render_nodes
         else:
@@ -554,7 +560,7 @@ if active_data is not None:
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
         with left_pane:
-            st.markdown("### Channel Directory")
+            st.markdown("### Rendering Directory")
             
             for node in page_nodes:
                 cid = node['cid']
@@ -610,7 +616,7 @@ if active_data is not None:
                         </div>
                         """)
                     else:
-                        st.caption("ℹ️ No Program Info...")
+                        st.caption("ℹ️ No scheduling metadata captured for this window.")
                     
                     btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
                     btn_label = "🟢 Channel Selected" if is_active else "Open Channel Schedule"
@@ -630,7 +636,7 @@ if active_data is not None:
                 else:
                     logo_segment = '<span style="font-size: 2.2rem;">📺</span>'
                     
-                group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">• <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
+                group_segment = f'<span style="font-size: 0.82rem; opacity: 0.7; font-weight: normal; margin-top: 2px;">Heuristic Index: <b>{cinfo["group"]}</b></span>' if cinfo.get('group') else ''
                 
                 st.html(f"""
                 <div class="right-header-container">
@@ -643,6 +649,10 @@ if active_data is not None:
                     </div>
                 </div>
                 """)
+                
+                # Injection of native copy target to fulfill clipboard requirement
+                st.caption("📋 Copy Channel Identifier String:")
+                st.code(cinfo['name'], language=None)
                             
                 st.markdown("---")
                 
