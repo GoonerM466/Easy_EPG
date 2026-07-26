@@ -246,7 +246,7 @@ with st.expander("⚙️ Settings", expanded=False):
         target_tz = timezone(timedelta(hours=tz_hours))
 
     with config_col2:
-        lookahead_options = [0, 2, 4, 6, 8]
+        lookahead_options = [0, 2, 4, 6, 8, 12, 24, 48, 72, "All"]
         if default_window_val not in lookahead_options:
             default_window_val = 2
         lookahead_index = lookahead_options.index(default_window_val)
