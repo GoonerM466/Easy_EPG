@@ -594,7 +594,7 @@ if active_data is not None:
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
         with left_pane:
-            st.markdown("### Rendering Directory")
+            st.markdown("### Channel Directory")
             
             for node in page_nodes:
                 cid = node['cid']
