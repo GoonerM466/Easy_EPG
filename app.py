@@ -1,12 +1,103 @@
-import gzip
+import os
 import io
+import gzip
 import re
 import requests
 import xml.etree.ElementTree as ET
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Easy EPG", layout="wide")
+
+# --- Procedural Native Component Generation (Option 3: React-Select Bypass) ---
+_COMPONENT_DIR = "native_select_component"
+if not os.path.exists(_COMPONENT_DIR):
+    os.makedirs(_COMPONENT_DIR)
+
+_HTML_PAYLOAD = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: "Source Sans Pro", sans-serif;
+            overflow: hidden; 
+        }
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 16px;
+            border-radius: 6px;
+            box-sizing: border-box;
+            outline: none;
+            appearance: auto;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        select:focus {
+            border-color: #ff4b4b;
+        }
+    </style>
+</head>
+<body>
+    <select id="native-dropdown"></select>
+    <script>
+        const selectEl = document.getElementById("native-dropdown");
+        let initialized = false;
+
+        function sendMessageToStreamlit(type, data) {
+            window.parent.postMessage({
+                isStreamlitMessage: true,
+                type: type,
+                ...data
+            }, "*");
+        }
+
+        window.addEventListener("message", function(event) {
+            if (event.data.type === "streamlit:render") {
+                const args = event.data.args;
+                const theme = event.data.theme;
+                
+                if (theme) {
+                    document.body.style.backgroundColor = theme.backgroundColor;
+                    selectEl.style.backgroundColor = theme.secondaryBackgroundColor;
+                    selectEl.style.color = theme.textColor;
+                    selectEl.style.border = `1px solid rgba(128, 128, 128, 0.3)`;
+                }
+
+                if (!initialized) {
+                    const options = args.options;
+                    const default_val = args.default_value;
+                    
+                    options.forEach(opt => {
+                        const el = document.createElement("option");
+                        el.value = opt;
+                        el.textContent = opt;
+                        if (opt === default_val) el.selected = true;
+                        selectEl.appendChild(el);
+                    });
+                    
+                    sendMessageToStreamlit("setFrameHeight", { height: selectEl.offsetHeight + 5 });
+                    initialized = true;
+                }
+            }
+        });
+
+        selectEl.addEventListener("change", function(e) {
+            sendMessageToStreamlit("setComponentValue", { value: e.target.value });
+        });
+    </script>
+</body>
+</html>
+"""
+
+with open(os.path.join(_COMPONENT_DIR, "index.html"), "w") as f:
+    f.write(_HTML_PAYLOAD)
+
+native_selectbox = components.declare_component("native_selectbox", path=_COMPONENT_DIR)
 
 # --- Security Gateway ---
 def check_password():
@@ -123,23 +214,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# --- Browser Prototype Engine Override (Hardware Keyboard Suppression) ---
-st.html("""
-<script>
-    const targetWindow = window.parent || window;
-    if (!targetWindow.focusIntercepted) {
-        const origFocus = targetWindow.HTMLInputElement.prototype.focus;
-        targetWindow.HTMLInputElement.prototype.focus = function(options) {
-            if (this.closest('[data-testid="stSelectbox"]')) {
-                return; // Execution dropped: OS keyboard initialization blocked
-            }
-            origFocus.call(this, options);
-        };
-        targetWindow.focusIntercepted = true;
-    }
-</script>
-""")
 
 # --- Configuration Controls ---
 with st.expander("⚙️ Settings", expanded=False):
@@ -329,12 +403,21 @@ if active_data is not None:
 
     available_genres = sorted(list(active_genres_set), key=str.lower)
 
-    # --- Persistent Rendering Nodes ---
+    # --- Persistent Rendering Nodes (Native Component Vectors) ---
     pers_col1, pers_col2 = st.columns(2)
+    
+    group_options = ["All Groups"] + available_groups
+    genre_options = ["All Genres"] + available_genres
+
     with pers_col1:
-        selected_group = st.selectbox("Category Group Index", options=["All Groups"] + available_groups)
+        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Category Group Index</p>", unsafe_allow_html=True)
+        raw_group = native_selectbox(options=group_options, default_value="All Groups", key="native_group")
+        selected_group = raw_group if raw_group is not None else "All Groups"
+
     with pers_col2:
-        selected_genre = st.selectbox("Genre Classification Filter", options=["All Genres"] + available_genres)
+        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Genre Classification Filter</p>", unsafe_allow_html=True)
+        raw_genre = native_selectbox(options=genre_options, default_value="All Genres", key="native_genre")
+        selected_genre = raw_genre if raw_genre is not None else "All Genres"
 
     with st.expander("🔍 Search & Filter Strings", expanded=False):
         with st.form(key="search_form"):
