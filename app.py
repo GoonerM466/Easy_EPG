@@ -10,8 +10,8 @@ from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Easy EPG", layout="wide")
 
-# --- Procedural Native Component Generation (Option 3: React-Select Bypass) ---
-_COMPONENT_DIR = "native_select_component"
+# --- Procedural Native Component Generation (Absolute Path & Strict Protocol) ---
+_COMPONENT_DIR = os.path.abspath("native_select_component")
 if not os.path.exists(_COMPONENT_DIR):
     os.makedirs(_COMPONENT_DIR)
 
@@ -80,21 +80,23 @@ _HTML_PAYLOAD = """
                         selectEl.appendChild(el);
                     });
                     
-                    sendMessageToStreamlit("setFrameHeight", { height: selectEl.offsetHeight + 5 });
+                    sendMessageToStreamlit("streamlit:setFrameHeight", { height: selectEl.offsetHeight + 10 });
                     initialized = true;
                 }
             }
         });
 
         selectEl.addEventListener("change", function(e) {
-            sendMessageToStreamlit("setComponentValue", { value: e.target.value });
+            sendMessageToStreamlit("streamlit:setComponentValue", { value: e.target.value });
         });
+
+        sendMessageToStreamlit("streamlit:componentReady", { apiVersion: 1 });
     </script>
 </body>
 </html>
 """
 
-with open(os.path.join(_COMPONENT_DIR, "index.html"), "w") as f:
+with open(os.path.join(_COMPONENT_DIR, "index.html"), "w", encoding="utf-8") as f:
     f.write(_HTML_PAYLOAD)
 
 native_selectbox = components.declare_component("native_selectbox", path=_COMPONENT_DIR)
