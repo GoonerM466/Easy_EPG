@@ -217,8 +217,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Configuration Controls ---
+# --- Configuration Controls (URL Query Parameter Sync) ---
 with st.expander("⚙️ Settings", expanded=False):
+    # Parse URL parameters with fallback defaults
+    url_window = st.query_params.get("window", "2")
+    try:
+        default_window_val = int(url_window)
+    except ValueError:
+        default_window_val = 2
+
+    url_nodes = st.query_params.get("nodes", "100")
+    default_nodes_val = int(url_nodes) if url_nodes != "All" else "All"
+
     config_col1, config_col2, config_col3 = st.columns(3)
 
     with config_col1:
@@ -236,16 +246,27 @@ with st.expander("⚙️ Settings", expanded=False):
         target_tz = timezone(timedelta(hours=tz_hours))
 
     with config_col2:
+        lookahead_options = [0, 2, 4, 6, 8]
+        if default_window_val not in lookahead_options:
+            default_window_val = 2
+        lookahead_index = lookahead_options.index(default_window_val)
+
         lookahead_hours = st.selectbox(
             "Future Programming Window",
-            options=[0, 2, 4, 6, 8],
-            index=1,
+            options=lookahead_options,
+            index=lookahead_index,
             format_func=lambda x: "Always Current Program Only" if x == 0 else f"Current + {x} Hours"
         )
+        st.query_params["window"] = str(lookahead_hours)
 
     with config_col3:
         per_page_options = [100, 200, 500, 1000, 2000, "All"]
-        per_page = st.selectbox("Render Nodes Per Page", options=per_page_options, index=0)
+        if default_nodes_val not in per_page_options:
+            default_nodes_val = 100
+        per_page_index = per_page_options.index(default_nodes_val)
+
+        per_page = st.selectbox("Render Nodes Per Page", options=per_page_options, index=per_page_index)
+        st.query_params["nodes"] = str(per_page)
 
 # --- Dual-Ingestion Gateway ---
 with st.expander("📡 Source Configuration", expanded=False):
