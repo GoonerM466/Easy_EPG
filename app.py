@@ -87,6 +87,8 @@ _HTML_PAYLOAD = """
                 
                 if (selectEl.value !== default_val) {
                     selectEl.value = default_val;
+                    // Forcing backend state parity on external variable mutation
+                    sendMessageToStreamlit("streamlit:setComponentValue", { value: default_val });
                 }
             }
         });
@@ -216,6 +218,20 @@ st.markdown("""
         margin-top: 6px;
         background-color: rgba(255, 255, 255, 0.15);
         color: #fff;
+    }
+    
+    /* Horizontal Pagination Lock Matrix */
+    div[data-testid="stHorizontalBlock"]:has(.page-index-label) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: flex-end !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.page-index-label) > div[data-testid="column"] {
+        min-width: 0 !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.page-index-label) > div[data-testid="column"]:nth-child(2) {
+        flex: 2 !important; 
     }
 </style>
 """, unsafe_allow_html=True)
@@ -549,12 +565,11 @@ if active_data is not None:
                 
             page_ui_col1, page_ui_col2, page_ui_col3 = st.columns([1, 4, 1])
             with page_ui_col1:
-                st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
                 if st.button("◄", use_container_width=True) and st.session_state.pagination_index > 1:
                     st.session_state.pagination_index -= 1
                     st.rerun()
             with page_ui_col2:
-                st.markdown(f"<p style='font-size: 0.85rem; margin-bottom: 2px; text-align: center;'>Page Index (Max: {chunks})</p>", unsafe_allow_html=True)
+                st.markdown(f"<p class='page-index-label' style='font-size: 0.85rem; margin-bottom: 2px; text-align: center;'>Page Index (Max: {chunks})</p>", unsafe_allow_html=True)
                 page_options = [str(i) for i in range(1, chunks + 1)]
                 current_target_str = str(st.session_state.pagination_index)
                 
@@ -564,7 +579,6 @@ if active_data is not None:
                     st.session_state.pagination_index = int(raw_page_sel)
                     st.rerun()
             with page_ui_col3:
-                st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
                 if st.button("►", use_container_width=True) and st.session_state.pagination_index < chunks:
                     st.session_state.pagination_index += 1
                     st.rerun()
