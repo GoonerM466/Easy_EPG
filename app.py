@@ -86,13 +86,11 @@ _HTML_PAYLOAD = """
                 
                 if (selectEl.value !== default_val) {
                     selectEl.value = default_val;
-                    // State feedback emission intentionally nullified here to prevent cyclical deadlocks
                 }
             }
         });
 
         selectEl.addEventListener("change", function(e) {
-            // Only user-initiated changes emit state alterations
             sendMessageToStreamlit("streamlit:setComponentValue", { value: e.target.value });
         });
 
@@ -214,6 +212,13 @@ st.markdown("""
         margin-top: 6px;
         background-color: rgba(255, 255, 255, 0.15);
         color: #fff;
+    }
+    /* Force horizontal alignment for mobile filters & pagination columns */
+    @media (max-width: 640px) {
+        [data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-direction: row !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -436,28 +441,6 @@ if active_data is not None:
 
     available_genres = sorted(list(active_genres_set), key=str.lower)
 
-    # --- Force side-by-side layout for Group and Genre filters on mobile ---
-    st.html("""
-    <div class="filters-container-hook" style="display:none;"></div>
-    <script>
-        (function() {
-            const hooks = document.querySelectorAll('.filters-container-hook');
-            hooks.forEach(hook => {
-                let elContainer = hook.closest('div[data-testid="stElementContainer"]') || hook.closest('.element-container');
-                if (elContainer && elContainer.nextElementSibling) {
-                    let hBlock = elContainer.nextElementSibling;
-                    hBlock.style.cssText = 'display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; gap: 10px !important; margin-bottom: 12px;';
-                    let cols = hBlock.querySelectorAll('div[data-testid="column"]');
-                    if (cols.length >= 2) {
-                        cols[0].style.cssText = 'flex: 1 1 50% !important; min-width: 0 !important; padding: 0 !important; margin: 0 !important;';
-                        cols[1].style.cssText = 'flex: 1 1 50% !important; min-width: 0 !important; padding: 0 !important; margin: 0 !important;';
-                    }
-                }
-            });
-        })();
-    </script>
-    """)
-
     pers_col1, pers_col2 = st.columns(2)
     group_options = ["All Groups"] + available_groups
     genre_options = ["All Genres"] + available_genres
@@ -566,7 +549,7 @@ if active_data is not None:
             if "pagination_index" not in st.session_state or filter_mutation_detected:
                 st.session_state.pagination_index = 1
                 
-            # DOM Intercept Script (Forced single-row alignment and zero gap between back/forward buttons and page dropdown)
+            # DOM Intercept Script (Executed natively to force UI topology and eliminate gaps/breaks)
             st.html("""
             <div class="pagination-container-hook" style="display:none;"></div>
             <script>
@@ -576,7 +559,7 @@ if active_data is not None:
                         let elContainer = hook.closest('div[data-testid="stElementContainer"]') || hook.closest('.element-container');
                         if (elContainer && elContainer.nextElementSibling) {
                             let hBlock = elContainer.nextElementSibling;
-                            hBlock.style.cssText = 'display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; gap: 0px !important; margin-bottom: 12px;';
+                            hBlock.style.cssText = 'display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; gap: 4px !important; margin-bottom: 12px;';
                             let cols = hBlock.querySelectorAll('div[data-testid="column"]');
                             if (cols.length >= 3) {
                                 cols[0].style.cssText = 'flex: 0 0 45px !important; min-width: 0 !important; width: 45px !important; padding: 0 !important; margin: 0 !important;';
@@ -604,7 +587,6 @@ if active_data is not None:
             with page_ui_col2:
                 page_options = [f"Page {i} of {chunks}" for i in range(1, chunks + 1)]
                 
-                # Injection of st.session_state.pagination_index into the key forces explicit destruction/remount
                 raw_page_sel = native_selectbox(
                     options=page_options, 
                     default_value=current_target_str, 
@@ -622,7 +604,6 @@ if active_data is not None:
 
             page_nodes = render_nodes[(st.session_state.pagination_index - 1) * per_page: min(((st.session_state.pagination_index - 1) * per_page) + per_page, total_nodes)]
 
-        # Force state parity against out-of-bounds nodes on page/filter shift
         if filter_mutation_detected or "active_channel_id" not in st.session_state:
             st.session_state.active_channel_id = page_nodes[0]['cid']
             
