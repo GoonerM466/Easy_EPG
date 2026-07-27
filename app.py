@@ -436,6 +436,28 @@ if active_data is not None:
 
     available_genres = sorted(list(active_genres_set), key=str.lower)
 
+    # --- Force side-by-side layout for Group and Genre filters on mobile ---
+    st.html("""
+    <div class="filters-container-hook" style="display:none;"></div>
+    <script>
+        (function() {
+            const hooks = document.querySelectorAll('.filters-container-hook');
+            hooks.forEach(hook => {
+                let elContainer = hook.closest('div[data-testid="stElementContainer"]') || hook.closest('.element-container');
+                if (elContainer && elContainer.nextElementSibling) {
+                    let hBlock = elContainer.nextElementSibling;
+                    hBlock.style.cssText = 'display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; gap: 10px !important; margin-bottom: 12px;';
+                    let cols = hBlock.querySelectorAll('div[data-testid="column"]');
+                    if (cols.length >= 2) {
+                        cols[0].style.cssText = 'flex: 1 1 50% !important; min-width: 0 !important; padding: 0 !important; margin: 0 !important;';
+                        cols[1].style.cssText = 'flex: 1 1 50% !important; min-width: 0 !important; padding: 0 !important; margin: 0 !important;';
+                    }
+                }
+            });
+        })();
+    </script>
+    """)
+
     pers_col1, pers_col2 = st.columns(2)
     group_options = ["All Groups"] + available_groups
     genre_options = ["All Genres"] + available_genres
@@ -544,7 +566,7 @@ if active_data is not None:
             if "pagination_index" not in st.session_state or filter_mutation_detected:
                 st.session_state.pagination_index = 1
                 
-            # DOM Intercept Script (Executed natively to force UI topology regardless of component wrappers)
+            # DOM Intercept Script (Forced single-row alignment and zero gap between back/forward buttons and page dropdown)
             st.html("""
             <div class="pagination-container-hook" style="display:none;"></div>
             <script>
@@ -554,7 +576,7 @@ if active_data is not None:
                         let elContainer = hook.closest('div[data-testid="stElementContainer"]') || hook.closest('.element-container');
                         if (elContainer && elContainer.nextElementSibling) {
                             let hBlock = elContainer.nextElementSibling;
-                            hBlock.style.cssText = 'display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; gap: 8px !important; margin-bottom: 12px;';
+                            hBlock.style.cssText = 'display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; gap: 0px !important; margin-bottom: 12px;';
                             let cols = hBlock.querySelectorAll('div[data-testid="column"]');
                             if (cols.length >= 3) {
                                 cols[0].style.cssText = 'flex: 0 0 45px !important; min-width: 0 !important; width: 45px !important; padding: 0 !important; margin: 0 !important;';
