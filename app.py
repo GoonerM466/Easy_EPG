@@ -220,18 +220,34 @@ st.markdown("""
         color: #fff;
     }
     
-    /* Horizontal Pagination Lock Matrix */
-    div[data-testid="stHorizontalBlock"]:has(.page-index-label) {
+    /* Horizontal Pagination Lock Matrix (Adjacent Sibling Overrides) */
+    .pagination-container-hook { 
+        display: none; 
+    }
+    .pagination-container-hook + div[data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
-        align-items: flex-end !important;
+        align-items: stretch !important;
+        gap: 8px !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.page-index-label) > div[data-testid="column"] {
+    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
         min-width: 0 !important;
+        width: auto !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.page-index-label) > div[data-testid="column"]:nth-child(2) {
-        flex: 2 !important; 
+    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
+        flex-grow: 1 !important; 
+    }
+    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1),
+    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(3) {
+        flex: 0 0 45px !important; 
+    }
+    .pagination-container-hook + div[data-testid="stHorizontalBlock"] button {
+        height: 42px !important;
+        line-height: 1 !important;
+        padding: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -563,24 +579,34 @@ if active_data is not None:
             if "pagination_index" not in st.session_state or filter_mutation_detected:
                 st.session_state.pagination_index = 1
                 
+            st.markdown('<div class="pagination-container-hook"></div>', unsafe_allow_html=True)
             page_ui_col1, page_ui_col2, page_ui_col3 = st.columns([1, 4, 1])
+            
+            # Sub-cycle state parity initialization to prevent component echo reversion
+            current_target_str = f"Page {st.session_state.pagination_index} of {chunks}"
+            if "last_raw_page_sel" not in st.session_state or filter_mutation_detected:
+                st.session_state.last_raw_page_sel = current_target_str
+
             with page_ui_col1:
                 if st.button("◄", use_container_width=True) and st.session_state.pagination_index > 1:
                     st.session_state.pagination_index -= 1
+                    st.session_state.last_raw_page_sel = f"Page {st.session_state.pagination_index} of {chunks}"
                     st.rerun()
             with page_ui_col2:
-                st.markdown(f"<p class='page-index-label' style='font-size: 0.85rem; margin-bottom: 2px; text-align: center;'>Page Index (Max: {chunks})</p>", unsafe_allow_html=True)
-                page_options = [str(i) for i in range(1, chunks + 1)]
-                current_target_str = str(st.session_state.pagination_index)
+                page_options = [f"Page {i} of {chunks}" for i in range(1, chunks + 1)]
                 
                 raw_page_sel = native_selectbox(options=page_options, default_value=current_target_str, key=f"native_page_{current_filter_hash}_{chunks}")
                 
-                if raw_page_sel and raw_page_sel != current_target_str:
-                    st.session_state.pagination_index = int(raw_page_sel)
+                # Delta evaluation strictly validates against the last recorded component emission
+                if raw_page_sel and raw_page_sel != st.session_state.last_raw_page_sel:
+                    selected_page = int(raw_page_sel.replace("Page ", "").split(" ")[0])
+                    st.session_state.pagination_index = selected_page
+                    st.session_state.last_raw_page_sel = raw_page_sel
                     st.rerun()
             with page_ui_col3:
                 if st.button("►", use_container_width=True) and st.session_state.pagination_index < chunks:
                     st.session_state.pagination_index += 1
+                    st.session_state.last_raw_page_sel = f"Page {st.session_state.pagination_index} of {chunks}"
                     st.rerun()
 
             # Delta tracking for pagination synchronization
