@@ -10,104 +10,6 @@ from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Easy EPG", layout="wide")
 
-# --- Procedural Native Component Generation (Absolute Path & Strict Protocol) ---
-_COMPONENT_DIR = os.path.abspath("native_select_component")
-if not os.path.exists(_COMPONENT_DIR):
-    os.makedirs(_COMPONENT_DIR)
-
-# Fixed height (42px) to prevent layout truncation shown in visual diagnostics
-_HTML_PAYLOAD = """
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body { 
-            margin: 0; 
-            padding: 0; 
-            font-family: "Source Sans Pro", sans-serif;
-            overflow: hidden; 
-        }
-        select {
-            width: 100%;
-            height: 38px; 
-            padding: 8px 12px;
-            font-size: 16px;
-            border-radius: 6px;
-            box-sizing: border-box;
-            outline: none;
-            appearance: auto;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
-        select:focus {
-            border-color: #ff4b4b;
-        }
-    </style>
-</head>
-<body>
-    <select id="native-dropdown"></select>
-    <script>
-        const selectEl = document.getElementById("native-dropdown");
-        let initialized = false;
-
-        function sendMessageToStreamlit(type, data) {
-            window.parent.postMessage({
-                isStreamlitMessage: true,
-                type: type,
-                ...data
-            }, "*");
-        }
-
-        window.addEventListener("message", function(event) {
-            if (event.data.type === "streamlit:render") {
-                const args = event.data.args;
-                const theme = event.data.theme;
-                const default_val = String(args.default_value);
-                
-                if (theme) {
-                    document.body.style.backgroundColor = theme.backgroundColor;
-                    selectEl.style.backgroundColor = theme.secondaryBackgroundColor;
-                    selectEl.style.color = theme.textColor;
-                    selectEl.style.border = `1px solid rgba(128, 128, 128, 0.3)`;
-                }
-
-                if (!initialized) {
-                    const options = args.options;
-                    
-                    options.forEach(opt => {
-                        const el = document.createElement("option");
-                        el.value = opt;
-                        el.textContent = opt;
-                        selectEl.appendChild(el);
-                    });
-                    
-                    sendMessageToStreamlit("streamlit:setFrameHeight", { height: 42 });
-                    initialized = true;
-                }
-                
-                if (selectEl.value !== default_val) {
-                    selectEl.value = default_val;
-                    // Forcing backend state parity on external variable mutation
-                    sendMessageToStreamlit("streamlit:setComponentValue", { value: default_val });
-                }
-            }
-        });
-
-        selectEl.addEventListener("change", function(e) {
-            sendMessageToStreamlit("streamlit:setComponentValue", { value: e.target.value });
-        });
-
-        sendMessageToStreamlit("streamlit:componentReady", { apiVersion: 1 });
-    </script>
-</body>
-</html>
-"""
-
-with open(os.path.join(_COMPONENT_DIR, "index.html"), "w", encoding="utf-8") as f:
-    f.write(_HTML_PAYLOAD)
-
-native_selectbox = components.declare_component("native_selectbox", path=_COMPONENT_DIR)
-
 # --- Security Gateway ---
 def check_password():
     if "password_correct" not in st.session_state:
@@ -133,19 +35,44 @@ if not check_password():
 
 st.title("Easy EPG")
 
-# --- Custom UI Pane Constraints & Global Theme Tints ---
+# --- Global CSS: Override Streamlit Mobile Stacking & UI Layout ---
 st.markdown("""
 <style>
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        overflow: hidden !important;
-        height: auto !important;
-        max-height: none !important;
+    /* Force Pagination Row layout on Mobile Viewports */
+    div[data-testid="stHorizontalBlock"]:has(button[key="page_prev_btn"]) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 8px !important;
     }
     
-    [data-testid="stVerticalBlockBorderWrapper"] > div {
-        touch-action: pan-y !important;
+    /* Target pagination columns specifically to keep horizontal alignment */
+    .pagination-wrapper {
+        display: flex !important;
+        flex-direction: row !important;
+        width: 100% !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        margin-bottom: 15px !important;
+    }
+    
+    .pagination-btn-left, .pagination-btn-right {
+        flex: 0 0 50px !important;
+        min-width: 50px !important;
+    }
+    
+    .pagination-select-center {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
     }
 
+    .pagination-select-center div[data-baseweb="select"] {
+        margin-top: 0px !important;
+    }
+
+    /* Force left/right column containment */
     [data-testid="stHorizontalBlock"] {
         height: 78vh;
         overflow: hidden;
@@ -153,12 +80,12 @@ st.markdown("""
     [data-testid="stHorizontalBlock"] > div:nth-child(1) {
         max-height: 78vh;
         overflow-y: auto !important;
-        padding-right: 15px;
+        padding-right: 10px;
     }
     [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         max-height: 78vh;
         overflow-y: auto !important;
-        padding-left: 20px;
+        padding-left: 15px;
         border-left: 1px solid rgba(49, 51, 63, 0.2);
     }
     
@@ -219,40 +146,10 @@ st.markdown("""
         background-color: rgba(255, 255, 255, 0.15);
         color: #fff;
     }
-    
-    /* Horizontal Pagination Lock Matrix (Adjacent Sibling Overrides) */
-    .pagination-container-hook { 
-        display: none; 
-    }
-    .pagination-container-hook + div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: stretch !important;
-        gap: 8px !important;
-    }
-    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-        min-width: 0 !important;
-        width: auto !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
-        flex-grow: 1 !important; 
-    }
-    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1),
-    .pagination-container-hook + div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(3) {
-        flex: 0 0 45px !important; 
-    }
-    .pagination-container-hook + div[data-testid="stHorizontalBlock"] button {
-        height: 42px !important;
-        line-height: 1 !important;
-        padding: 0 !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Configuration Controls (URL Query Parameter Sync & Native Components) ---
+# --- Configuration Controls ---
 with st.expander("⚙️ Settings", expanded=False):
     url_window = st.query_params.get("window", "2")
     if url_window == "All":
@@ -269,7 +166,6 @@ with st.expander("⚙️ Settings", expanded=False):
     config_col1, config_col2, config_col3 = st.columns(3)
 
     with config_col1:
-        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Local Timezone Offset</p>", unsafe_allow_html=True)
         tz_options = {
             "UTC / GMT": 0,
             "EST / EDT (UTC-5 / UTC-4)": -4,
@@ -280,40 +176,35 @@ with st.expander("⚙️ Settings", expanded=False):
             "CET / CEST (UTC+1 / UTC+2)": 2
         }
         tz_keys = list(tz_options.keys())
-        raw_tz = native_selectbox(options=tz_keys, default_value=tz_keys[1], key="native_tz")
-        selected_tz_offset = raw_tz if raw_tz else tz_keys[1]
+        selected_tz_offset = st.selectbox("Local Timezone Offset", tz_keys, index=1)
         tz_hours = tz_options[selected_tz_offset]
         target_tz = timezone(timedelta(hours=tz_hours))
 
     with config_col2:
-        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Future Programming Window</p>", unsafe_allow_html=True)
         lookahead_options = [0, 2, 4, 6, 8, 12, 24, 48, 72, "All"]
         if default_window_val not in lookahead_options:
             default_window_val = 2
             
         lookahead_strings = ["Always Current Program Only" if x == 0 else ("All Programming" if x == "All" else f"Current + {x} Hours") for x in lookahead_options]
-        default_lookahead_str = lookahead_strings[lookahead_options.index(default_window_val)]
+        default_lookahead_idx = lookahead_options.index(default_window_val)
         
-        raw_lookahead = native_selectbox(options=lookahead_strings, default_value=default_lookahead_str, key="native_window")
-        selected_lookahead_str = raw_lookahead if raw_lookahead else default_lookahead_str
+        selected_lookahead_str = st.selectbox("Future Programming Window", lookahead_strings, index=default_lookahead_idx)
         lookahead_hours = lookahead_options[lookahead_strings.index(selected_lookahead_str)]
         st.query_params["window"] = str(lookahead_hours)
 
     with config_col3:
-        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Items Per Page</p>", unsafe_allow_html=True)
         per_page_options = [50, 100, 200, 500, 1000, 2000, "All"]
         if default_nodes_val not in per_page_options:
             default_nodes_val = 100
             
         per_page_strings = [str(x) for x in per_page_options]
-        default_per_page_str = str(default_nodes_val)
+        default_per_page_idx = per_page_options.index(default_nodes_val)
         
-        raw_per_page = native_selectbox(options=per_page_strings, default_value=default_per_page_str, key="native_nodes")
-        selected_per_page_str = raw_per_page if raw_per_page else default_per_page_str
+        selected_per_page_str = st.selectbox("Items Per Page", per_page_strings, index=default_per_page_idx)
         per_page = int(selected_per_page_str) if selected_per_page_str != "All" else "All"
         st.query_params["nodes"] = str(per_page)
 
-# --- Dual-Ingestion Gateway ---
+# --- Source Input ---
 with st.expander("📡 Source Config", expanded=False):
     epg_url_query = st.query_params.get("epg_url", "")
     col_input1, col_input2 = st.columns(2)
@@ -428,7 +319,7 @@ def process_epg_stream(file_bytes, is_gz, tz_info):
 
     return sorted(list(groups)), channels, programmes
 
-# --- Active Target Data Stream Resolution ---
+# --- Load Active Data ---
 active_data = None
 is_gzipped = False
 
@@ -475,14 +366,10 @@ if active_data is not None:
     genre_options = ["All Genres"] + available_genres
 
     with pers_col1:
-        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Category Group Index</p>", unsafe_allow_html=True)
-        raw_group = native_selectbox(options=group_options, default_value="All Groups", key="native_group")
-        selected_group = raw_group if raw_group is not None else "All Groups"
+        selected_group = st.selectbox("Category Group Index", group_options, index=0)
 
     with pers_col2:
-        st.markdown("<p style='font-size: 0.85rem; margin-bottom: 2px;'>Genre Classification Filter</p>", unsafe_allow_html=True)
-        raw_genre = native_selectbox(options=genre_options, default_value="All Genres", key="native_genre")
-        selected_genre = raw_genre if raw_genre is not None else "All Genres"
+        selected_genre = st.selectbox("Genre Classification Filter", genre_options, index=0)
 
     with st.expander("🔍 Search & Filter", expanded=False):
         with st.form(key="search_form"):
@@ -490,7 +377,7 @@ if active_data is not None:
             search_query = st.text_input("Query String", "").strip().lower()
             st.form_submit_button("Execute Search")
             
-    # --- Matrix Evaluation Loop ---
+    # --- Filter & Sort Engine ---
     render_nodes = []
     is_active_genre = (selected_genre != "All Genres")
     is_active_search = bool(search_query)
@@ -554,16 +441,15 @@ if active_data is not None:
             return datetime.max.replace(tzinfo=timezone.utc)
         render_nodes.sort(key=get_sort_datetime)
 
-    # --- State Desynchronization Resolver ---
+    # --- Session State & Pagination Controller ---
     current_filter_hash = hash((selected_group, selected_genre, search_query, search_vector))
-    filter_mutation_detected = False
-    page_mutation_detected = False
     
-    if "system_filter_hash" not in st.session_state:
-        st.session_state.system_filter_hash = current_filter_hash
-    elif st.session_state.system_filter_hash != current_filter_hash:
-        filter_mutation_detected = True
-        st.session_state.system_filter_hash = current_filter_hash
+    if "current_filter_hash" not in st.session_state or st.session_state.current_filter_hash != current_filter_hash:
+        st.session_state.current_filter_hash = current_filter_hash
+        st.session_state.pagination_index = 1
+
+    if "pagination_index" not in st.session_state:
+        st.session_state.pagination_index = 1
 
     if not render_nodes:
         st.warning("No Results Found...")
@@ -574,62 +460,75 @@ if active_data is not None:
         if per_page == "All":
             page_nodes = render_nodes
         else:
-            chunks = (total_nodes + per_page - 1) // per_page
+            chunks = max(1, (total_nodes + per_page - 1) // per_page)
             
-            if "pagination_index" not in st.session_state or filter_mutation_detected:
+            # Boundary validation
+            if st.session_state.pagination_index > chunks:
+                st.session_state.pagination_index = chunks
+            if st.session_state.pagination_index < 1:
                 st.session_state.pagination_index = 1
-                
-            st.markdown('<div class="pagination-container-hook"></div>', unsafe_allow_html=True)
-            page_ui_col1, page_ui_col2, page_ui_col3 = st.columns([1, 4, 1])
-            
-            # Sub-cycle state parity initialization to prevent component echo reversion
-            current_target_str = f"Page {st.session_state.pagination_index} of {chunks}"
-            if "last_raw_page_sel" not in st.session_state or filter_mutation_detected:
-                st.session_state.last_raw_page_sel = current_target_str
 
-            with page_ui_col1:
-                if st.button("◄", use_container_width=True) and st.session_state.pagination_index > 1:
+            # Callback Handlers for Deterministic State Updates
+            def prev_page_cb():
+                if st.session_state.pagination_index > 1:
                     st.session_state.pagination_index -= 1
-                    st.session_state.last_raw_page_sel = f"Page {st.session_state.pagination_index} of {chunks}"
-                    st.rerun()
-            with page_ui_col2:
-                page_options = [f"Page {i} of {chunks}" for i in range(1, chunks + 1)]
-                
-                raw_page_sel = native_selectbox(options=page_options, default_value=current_target_str, key=f"native_page_{current_filter_hash}_{chunks}")
-                
-                # Delta evaluation strictly validates against the last recorded component emission
-                if raw_page_sel and raw_page_sel != st.session_state.last_raw_page_sel:
-                    selected_page = int(raw_page_sel.replace("Page ", "").split(" ")[0])
-                    st.session_state.pagination_index = selected_page
-                    st.session_state.last_raw_page_sel = raw_page_sel
-                    st.rerun()
-            with page_ui_col3:
-                if st.button("►", use_container_width=True) and st.session_state.pagination_index < chunks:
+
+            def next_page_cb():
+                if st.session_state.pagination_index < chunks:
                     st.session_state.pagination_index += 1
-                    st.session_state.last_raw_page_sel = f"Page {st.session_state.pagination_index} of {chunks}"
-                    st.rerun()
 
-            # Delta tracking for pagination synchronization
-            if "last_page_index" not in st.session_state:
-                st.session_state.last_page_index = st.session_state.pagination_index
-            elif st.session_state.last_page_index != st.session_state.pagination_index:
-                page_mutation_detected = True
-                st.session_state.last_page_index = st.session_state.pagination_index
+            def dropdown_page_cb():
+                sel_str = st.session_state.pagination_select_box
+                idx = int(sel_str.split()[1])
+                st.session_state.pagination_index = idx
 
-            page_nodes = render_nodes[(st.session_state.pagination_index - 1) * per_page: min(((st.session_state.pagination_index - 1) * per_page) + per_page, total_nodes)]
+            page_options = [f"Page {i} of {chunks}" for i in range(1, chunks + 1)]
+            current_option_str = f"Page {st.session_state.pagination_index} of {chunks}"
 
-        # Force state parity against out-of-bounds nodes on page/filter shift
-        if filter_mutation_detected or page_mutation_detected or "active_channel_id" not in st.session_state:
-            st.session_state.active_channel_id = page_nodes[0]['cid']
+            # High-priority horizontal flex container forcing mobile side-by-side layout
+            st.markdown('<div class="pagination-wrapper">', unsafe_allow_html=True)
             
-        if filter_mutation_detected or page_mutation_detected:
-            st.html("""
-            <script>
-                const targetDoc = window.parent || window;
-                const leftPane = targetDoc.document.querySelector('[data-testid="stHorizontalBlock"] > div:nth-child(1)');
-                if (leftPane) { leftPane.scrollTop = 0; }
-            </script>
-            """)
+            p_col1, p_col2, p_col3 = st.columns([1, 4, 1])
+
+            with p_col1:
+                st.button(
+                    "◄", 
+                    key="page_prev_btn", 
+                    use_container_width=True, 
+                    disabled=(st.session_state.pagination_index <= 1),
+                    on_click=prev_page_cb
+                )
+
+            with p_col2:
+                st.selectbox(
+                    "Page Selection",
+                    options=page_options,
+                    index=st.session_state.pagination_index - 1,
+                    key="pagination_select_box",
+                    label_visibility="collapsed",
+                    on_change=dropdown_page_cb
+                )
+
+            with p_col3:
+                st.button(
+                    "►", 
+                    key="page_next_btn", 
+                    use_container_width=True, 
+                    disabled=(st.session_state.pagination_index >= chunks),
+                    on_click=next_page_cb
+                )
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # Slice render nodes for the current active page
+            start_idx = (st.session_state.pagination_index - 1) * per_page
+            end_idx = min(start_idx + per_page, total_nodes)
+            page_nodes = render_nodes[start_idx:end_idx]
+
+        # Sync active channel selection
+        if "active_channel_id" not in st.session_state or st.session_state.active_channel_id not in [n['cid'] for n in page_nodes]:
+            if page_nodes:
+                st.session_state.active_channel_id = page_nodes[0]['cid']
 
         left_pane, right_pane = st.columns([1.8, 1.4], gap="medium")
         
@@ -694,7 +593,7 @@ if active_data is not None:
                     btn_key_suffix = str(display_prog['start'].timestamp()) if display_prog else "null"
                     btn_label = "🟢 Channel Selected" if is_active else "Open Channel Schedule"
                     
-                    # Hidden metadata footprint injection for native DOM interception script
+                    # Hidden DOM element for channel name clipboard duplication
                     safe_name = cinfo['name'].replace('"', '&quot;')
                     st.markdown(f'<div class="epg-copy-target" data-chan-name="{safe_name}" style="display:none;"></div>', unsafe_allow_html=True)
                     
@@ -750,7 +649,7 @@ if active_data is not None:
                     st.markdown("### ⏭️ Upcoming Programs")
                     for prog in future_progs:
                         g_class = get_genre_style_class(prog['genre'])
-                        genre_html = f'<div style="font-size: 0.85rem; font-weight: 400; margin-top: 4px; opacity: 0.85;">[{prog["genre"]}]</div>' if prog['genre'] else ""
+                        genre_html = f'<div style="font-size: 0.85rem; font-weight: 400; opacity: 0.85;">[{prog["genre"]}]</div>' if prog['genre'] else ""
                         
                         st.html(f"""
                         <div class="schedule-detail-card {g_class}">
@@ -762,7 +661,7 @@ if active_data is not None:
                 elif not current_prog and not future_progs:
                     st.info("No timeline data loaded for this entity.")
 
-# --- DOM Capture Interceptor Script (Clipboard Bypass) ---
+# --- Background Clipboard Handler Script ---
 st.components.v1.html("""
 <script>
 const parentDoc = window.parent.document;
@@ -781,7 +680,7 @@ if (!parentDoc.window_epg_bound) {
                     ta.style.opacity = '0';
                     parentDoc.body.appendChild(ta);
                     ta.select();
-                    try { parentDoc.execCommand('copy'); } catch(err) { console.error("Clipboard replication failed."); }
+                    try { parentDoc.execCommand('copy'); } catch(err) { console.error("Clipboard write error."); }
                     parentDoc.body.removeChild(ta);
                 }
             }
