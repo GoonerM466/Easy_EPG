@@ -685,6 +685,9 @@ if active_data is not None:
                     safe_name = cinfo['name'].replace('"', '&quot;')
                     st.markdown(f'<div class="epg-copy-target" data-chan-name="{safe_name}" style="display:none;"></div>', unsafe_allow_html=True)
                     
+                    if is_active:
+                        st.markdown('<div class="active-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+                    
                     if st.button(btn_label, key=f"select_{cid}_{match_type}_{btn_key_suffix}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.active_channel_id = cid
                         st.rerun()
@@ -749,10 +752,22 @@ if active_data is not None:
                 elif not current_prog and not future_progs:
                     st.info("No timeline data loaded for this entity.")
 
-# --- DOM Capture Interceptor Script (Clipboard Bypass) ---
+# --- DOM Capture Interceptor Script (Clipboard Bypass & Focus Anchor) ---
 st.html("""
 <script>
 const parentDoc = window.parent.document;
+
+// Scroll active card into view on load/rerun if present
+setTimeout(() => {
+    const activeAnchor = parentDoc.querySelector('.active-card-anchor');
+    if (activeAnchor) {
+        let elContainer = activeAnchor.closest('div[data-testid="stVerticalBlockBorderWrapper"]') || activeAnchor.closest('.st-key-select_' + activeAnchor);
+        if (elContainer) {
+            elContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+}, 150);
+
 if (!parentDoc.window_epg_bound) {
     parentDoc.addEventListener('click', function(e) {
         let target = e.target.closest('button');
