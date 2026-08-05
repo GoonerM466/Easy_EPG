@@ -378,8 +378,11 @@ def process_epg_stream(file_bytes, is_gz, tz_info):
             stop_dt = parse_xmltv_datetime(elem.get('stop', ''), tz_info)
             
             if start_dt and stop_dt:
-                title = elem.find('title').text if elem.find('title') is not None else "No Title"
-                desc = elem.find('desc').text if elem.find('desc') is not None else ""
+                title_elem = elem.find('title')
+                title = title_elem.text if title_elem is not None and title_elem.text else "No Title"
+                
+                desc_elem = elem.find('desc')
+                desc = desc_elem.text if desc_elem is not None and desc_elem.text else ""
                 
                 raw_categories = [cat.text for cat in elem.findall('category') if cat.text]
                 clean_categories = []
@@ -490,8 +493,8 @@ if active_data is not None:
                     match_labels.append("Genre Match")
                     
             if is_active_search:
-                t_match = search_query in p['title'].lower()
-                d_match = search_query in p['desc'].lower()
+                t_match = p['title'] is not None and search_query in p['title'].lower()
+                d_match = p['desc'] is not None and search_query in p['desc'].lower()
                 g_match = p['genre'] is not None and search_query in p['genre'].lower()
                 
                 if search_vector == "All":
@@ -747,7 +750,7 @@ if active_data is not None:
                     st.info("No timeline data loaded for this entity.")
 
 # --- DOM Capture Interceptor Script (Clipboard Bypass) ---
-st.components.v1.html("""
+st.html("""
 <script>
 const parentDoc = window.parent.document;
 if (!parentDoc.window_epg_bound) {
@@ -774,4 +777,4 @@ if (!parentDoc.window_epg_bound) {
     parentDoc.window_epg_bound = true;
 }
 </script>
-""", height=0)
+""")
